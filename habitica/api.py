@@ -86,6 +86,7 @@ class Habitica(object):
 
         print(res.url)  # debug...
         if res.status_code == requests.codes.ok or requests.codes.created:
+            if "data" in res.json():
                 return res.json()["data"]
             else:
                 return None
