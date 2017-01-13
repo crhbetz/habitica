@@ -47,13 +47,20 @@ class Habitica(object):
         # get involved in the API itself and... help it.
         if self.aspect:
             aspect_id = kwargs.pop('_id', None)
+            resource_id = kwargs.pop('_id2', None)
             direction = kwargs.pop('_direction', None)
             uri = '%s/%s' % (self.auth['url'],
                              API_URI_BASE)
             if aspect_id is not None:
-                uri = '%s/%s/%s' % (uri,
+                uri = '%s/%s/%s/%s' % (uri,
                                     self.aspect,
-                                    str(aspect_id))
+                                    str(aspect_id),
+                                    self.resource)
+                if resource_id is not None:
+                    uri = '%s/%s' % (uri,
+                                     str(resource_id))
+                    if self.resource == 'checklist':
+                        uri = uri + '/score'
             elif self.aspect == 'tasks':
                 uri = '%s/%s/%s' % (uri,
                                     self.aspect,
@@ -77,7 +84,7 @@ class Habitica(object):
             res = getattr(requests, method)(uri, headers=self.headers,
                                             params=kwargs)
 
-        # print(res.url)  # debug...
+        print(res.url)  # debug...
         if res.status_code == requests.codes.ok:
             return res.json()["data"]
         else:
