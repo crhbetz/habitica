@@ -85,7 +85,9 @@ class Habitica(object):
                                             params=kwargs)
 
         print(res.url)  # debug...
-        if res.status_code == requests.codes.ok:
-            return res.json()["data"]
+        if res.status_code == requests.codes.ok or requests.codes.created:
+                return res.json()["data"]
+            else:
+                return None
         else:
             res.raise_for_status()
