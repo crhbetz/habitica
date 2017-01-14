@@ -53,9 +53,11 @@ class Habitica(object):
                              API_URI_BASE)
             if aspect_id is not None:
                 uri = '%s/%s/%s/%s' % (uri,
-                                    self.aspect,
-                                    str(aspect_id),
-                                    self.resource)
+                                       self.aspect,
+                                       str(aspect_id),
+                                       self.resource)
+                if method == 'put':
+                    uri = uri.replace('/user','') # Remove 'user' when updating tasks.
                 if resource_id is not None:
                     uri = '%s/%s' % (uri,
                                      str(resource_id))
