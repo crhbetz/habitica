@@ -70,7 +70,9 @@ class Habitica(object):
                                     self.resource,
                                     self.aspect)
             if direction is not None:
+                uri = uri.replace('/user','') # Remove 'user' when scoring tasks.
                 uri = '%s/score/%s' % (uri, direction)
+                
         else:
             uri = '%s/%s/%s' % (self.auth['url'],
                                 API_URI_BASE,
@@ -84,7 +86,7 @@ class Habitica(object):
             res = getattr(requests, method)(uri, headers=self.headers,
                                             params=kwargs)
 
-        print(res.url)  # debug...
+        # print(res.url)  # debug...
         if res.status_code == requests.codes.ok or requests.codes.created:
             if "data" in res.json():
                 return res.json()["data"]
