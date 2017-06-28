@@ -6,7 +6,9 @@ try:
 except ImportError:
     import sys
     import os
-    sys.path.insert(0, os.path.abspath('..'))
+    myself = os.path.realpath(sys.argv[0])
+    libs = os.path.join(os.path.dirname(myself), "..")
+    sys.path.insert(0, libs)
     import habitica
 
 if __name__ == '__main__':
