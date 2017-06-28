@@ -524,90 +524,6 @@ def hp_down_ten(auth, hbt, user):
     # Do a party check, but just a party of myself.
     party_hp_down_ten(hbt, user, myself=True)
 
-def get_quest_info(cache, hbt, user=None, party=None):
-    if user == None:
-        user = hbt.user()
-    if party == None:
-        party = hbt.groups.party()
-    # gather quest progress information (yes, janky. the API
-    # doesn't make this stat particularly easy to grab...).
-    # because hitting /content downloads a crapload of stuff, we
-    # cache info about the current quest in cache.
-    quest = 'Not currently on a quest'
-    if (party is not None and
-            party.get('quest', '') and
-            party.get('quest').get('active')):
-
-        quest_key = party['quest']['key']
-        # wtf‽
-        # party['quest']['progress'] != user['party']['quest']['progress']
-        quest_damage = user['party']['quest']['progress']['up']
-        collect_quest = {}
-
-        if cache.get(SECTION_CACHE_QUEST, 'quest_key') != quest_key:
-            # we're on a new quest, update quest key
-            logging.info('Updating quest information...')
-            content = hbt.content()
-            quest_type = ''
-            quest_max = []
-            quest_title = content['quests'][quest_key]['text']
-
-            # if there's a content/quests/<quest_key>/collect,
-            # then drill into .../collect/<whatever>/count and
-            # .../collect/<whatever>/text and get those values
-            if content.get('quests', {}).get(quest_key, {}).get('collect'):
-                logging.debug("\tOn a collection type of quest")
-                quest_type = 'collect'
-                for k, v in content['quests'][quest_key]['collect'].items():
-                    if k not in collect_quest.keys():
-                        collect_quest[k] = {}
-                    collect_quest[k]['max'] = v['count']
-                    quest_max.append(str(v['count']))
-            # else if it's a boss, then hit up
-            # content/quests/<quest_key>/boss/hp
-            elif content.get('quests', {}).get(quest_key, {}).get('boss'):
-                logging.debug("\tOn a boss/hp type of quest")
-                quest_type = 'hp'
-                quest_max.append(str(content['quests'][quest_key]['boss']['hp']))
-            # store repr of quest info from /content
-            cache = update_quest_cache(CACHE_CONF,
-                                       quest_key=str(quest_key),
-                                       quest_type=str(quest_type),
-                                       quest_max=' '.join(quest_max),
-                                       quest_title=str(quest_title))
-
-        # now we use /party and quest_type to figure out our progress!
-        quest_type = cache.get(SECTION_CACHE_QUEST, 'quest_type')
-        quest_progress = []
-        quest = '"%s"' % (cache.get(SECTION_CACHE_QUEST, 'quest_title'))
-        if quest_type == 'collect':
-            qp_tmp = party['quest']['progress']['collect']
-            # For some quests you collect multiple types of things.
-            for k, v in qp_tmp.items():
-                quest_progress.append('%s: %s' % (nice_name(k), v))
-                if k not in collect_quest.keys():
-                    collect_quest[k] = {}
-                collect_quest[k]['total'] = v
-            for k, v in user['party']['quest']['progress']['collect'].items():
-                collect_quest[k]['current']  = v
-            count = 0
-            for k, v in collect_quest.items():
-                quest += ' %s %d/%d' % (nice_name(k), collect_quest[k]['total'],
-                                        int(cache.get(SECTION_CACHE_QUEST, 'quest_max').split(' ')[count]))
-                # If somebody is in the Inn, they will not have collected
-                # anything.
-                if k not in collect_quest or 'current' not in collect_quest[k]:
-                    quest += ' (+0)'
-                else:
-                    quest += ' (+%d)' % (collect_quest[k]['current'])
-                count += 1
-        else:
-            quest_progress.append('%d' % party['quest']['progress']['hp'])
-            quest += ' %s/%s' % (' '.join(quest_progress),
-                                 cache.get(SECTION_CACHE_QUEST, 'quest_max'))
-            quest += ' (-%d)' % quest_damage
-
-    return quest
 
 def set_checklists_status(auth, args):
     """Set display_checklist status, toggling from cli flag"""
@@ -1251,7 +1167,7 @@ def cli():
                 quest_progress = cache.get(SECTION_CACHE_QUEST, 'quest_max')
 
             if quest_data['active']:
-                quest = '"%s" - %s/%s\n' % (
+                quest = '"%s" - %s/%s' % (
                             cache.get(SECTION_CACHE_QUEST, 'quest_title'),
                             str(int(quest_progress)),
                             cache.get(SECTION_CACHE_QUEST, 'quest_max'))
@@ -1264,7 +1180,7 @@ def cli():
             groupUserStatus = group_user_status(quest_data, auth, hbt)
 
             len_ljust = 6
-            print('%s %s' % ('\nQuest:'.rjust(len_ljust, ' '), quest))
+            print('%s %s' % ('Quest:'.rjust(len_ljust, ' '), quest))
             print_gus(groupUserStatus, len_ljust)
 
 
@@ -1400,10 +1316,11 @@ def cli():
                 quest_progress = cache.get(SECTION_CACHE_QUEST, 'quest_max')
 
             if party['quest']['active']:
-                quest = '"%s" - %s/%s' % (
+                quest = '"%s" - %s/%s (-%s)' % (
                             cache.get(SECTION_CACHE_QUEST, 'quest_title'),
                             str(int(quest_progress)),
-                            cache.get(SECTION_CACHE_QUEST, 'quest_max'))
+                            cache.get(SECTION_CACHE_QUEST, 'quest_max'),
+                            str(int(user['party']['quest']['progress']['up'])))
                             
             else:
                 quest = '%s "%s"' % (
@@ -1413,8 +1330,6 @@ def cli():
 
         egg_count = sum(items['eggs'].values())
         potion_count = sum(items['hatchingPotions'].values())
-
-#        quest = get_quest_info(cache, hbt, user, party)
 
         # prepare and print status strings
         title = user['profile']['name']
