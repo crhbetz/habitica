@@ -1125,9 +1125,8 @@ def cli():
         before_user = user
         purchase = api.Habitica(auth=auth, resource="user",
                                 aspect="buy-armoire")
-        purchase(_method='post')
-        user = hbt.user()
-        show_delta(hbt, before_user, user)
+        received = purchase(_method='post')
+        print('Got ' + received['armoire']['dropText'] + '!')
 
     # Quest manipulations
     elif args['<command>'] == 'quest':
