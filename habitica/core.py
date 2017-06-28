@@ -297,6 +297,7 @@ def cli():
         if group:
             party_id = group[0]['id']
             party_title = group[0]['name']
+            party = party_title
 
             # if on a quest with the party, grab quest info
             quest_data = getattr(hbt.groups, party_id)()['quest']
