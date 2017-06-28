@@ -624,6 +624,63 @@ def set_checklists_status(auth, args):
 
     return
 
+def group_user_status(quest_data, auth, hbt):
+    groupUserStatus = {}
+    groupUserStatus['users'] = {}
+    groupUserStatus['queststatus'] = quest_data['active']
+    for user in quest_data['members'].keys():
+        groupUserStatus['users'][user] = {}
+        member = getattr(hbt.members, user)()
+        groupUserStatus.setdefault('longestname', 1)
+        if len(member['profile']['name']) > groupUserStatus['longestname']:
+                groupUserStatus['longestname'] = len(member['profile']['name'])
+        groupUserStatus['users'][user]['name'] = member['profile']['name']
+        if quest_data['members'][user] == True:
+                groupUserStatus['users'][user]['decision'] = 'accepted'
+        elif quest_data['members'][user] == False:
+                groupUserStatus['users'][user]['decision'] = 'denied'
+        else:
+                groupUserStatus['users'][user]['decision'] = 'waiting'
+        if member['preferences']['sleep']:
+                groupUserStatus['users'][user]['sleep'] = 'sleeping'
+        else:
+                groupUserStatus['users'][user]['sleep'] = 'active'
+        groupUserStatus['users'][user]['lastactive'] = member['auth']['timestamps']['loggedin']
+        stats = ['hp', 'maxHealth', 'mp', 'maxMP', 'class']
+        for stat in stats:
+            groupUserStatus['users'][user][stat] = member['stats'][stat]
+        
+    groupUserStatus['users'] = OrderedDict(sorted(groupUserStatus['users'].items(), key=lambda t: t[1]['lastactive']))
+    return groupUserStatus
+
+
+def print_gus(groupUserStatus, len_ljust):
+    len_ljust += 1
+    headLine = ' '.rjust(len_ljust, ' ')
+    headLine += 'Name'.ljust(groupUserStatus['longestname'] + 1)
+    headLine += 'Class'.ljust(9, ' ')
+    if not groupUserStatus['queststatus']:
+        headLine += 'Answer'.ljust(10, ' ')
+    headLine += 'Status'.ljust(9, ' ')
+    headLine += 'Last login'.ljust(14, ' ')
+    headLine += 'Health'.ljust(8, ' ')
+    headLine += 'Mana'.ljust(8, ' ')
+    print(headLine)
+
+    print(' '.rjust(len_ljust, ' ') + '-' * (len(headLine) - len_ljust)) #(groupUserStatus['longestname'] + 19 + 14))
+
+    for user in groupUserStatus['users'].values():
+        userLine = ' '.rjust(len_ljust, ' ')
+        userLine += user['name'].ljust(groupUserStatus['longestname'] + 1)
+        userLine += user['class'].capitalize().ljust(9, ' ') 
+        if not groupUserStatus['queststatus']:
+            userLine += user['decision'].ljust(10, ' ')
+        userLine += user['sleep'].ljust(9, ' ')
+        userLine += humanize.naturaltime(datetime.datetime.now(pytz.utc) - dateutil.parser.parse(user['lastactive'])).ljust(14, ' ')
+        userLine += (str(int(user['hp'])) + '/' + str(user['maxHealth'])).ljust(8, ' ')
+        userLine += (str(int(user['mp'])) + '/' + str(user['maxMP'])).ljust(8, ' ')
+        print(userLine)
+
 
 def cli():
     """Habitica command-line interface.
@@ -1142,30 +1199,74 @@ def cli():
         received = purchase(_method='post')
         print('Got ' + received['armoire']['dropText'] + '!')
 
-    # Quest manipulations
+    #Quest manipulations
     elif args['<command>'] == 'quest':
-        if len(args['<args>']) == 0:
-            print(get_quest_info(cache, hbt))
-        elif 'accept' in args['<args>']:
-            user = hbt.user()
-            party = hbt.groups.party()
+        # if on a quest with the party, grab quest info
+        group = hbt.groups(type='party')
+        party_id = group[0]['id']
+        quest_data = getattr(hbt.groups, party_id)()['quest']
+        if quest_data:
+            quest_key = quest_data['key']
 
-            if party['quest']['active'] == True:
-                if 'verbose' in args['<args>']:
-                    print("Quest already started!")
-            elif len(party['quest']['members']) == 0:
-                if 'verbose' in args['<args>']:
-                    print("No quest proposed!")
-            elif party['quest']['members'][user['id']] != True:
-                accepter = api.Habitica(auth=auth, resource="groups", aspect=party['id'])
-                accepter(_method='post', _one='quests', _two='accept')
-                print(get_quest_info(cache, hbt, user=user, party=party))
+            if cache.get(SECTION_CACHE_QUEST, 'quest_key') != quest_key:
+                # we're on a new quest, update quest key
+                logging.info('Updating quest information...')
+                content = hbt.content()
+                quest_type = ''
+                quest_max = '-1'
+                quest_title = content['quests'][quest_key]['text']
+
+                # if there's a content/quests/<quest_key/collect,
+                # then drill into .../collect/<whatever>/count and
+                # .../collect/<whatever>/text and get those values
+                if content.get('quests', {}).get(quest_key,
+                                                 {}).get('collect'):
+                    logging.debug("\tOn a collection type of quest")
+                    qt = 'collect'
+                    clct = content['quests'][quest_key][qt].values()[0]
+                    quest_max = clct['count']
+                # else if it's a boss, then hit up
+                # content/quests/<quest_key>/boss/hp
+                elif content.get('quests', {}).get(quest_key,
+                                                   {}).get('boss'):
+                    logging.debug("\tOn a boss/hp type of quest")
+                    qt = 'hp'
+                    quest_max = content['quests'][quest_key]['boss'][qt]
+
+                # store repr of quest info from /content
+                cache = update_quest_cache(CACHE_CONF,
+                                           quest_key=str(quest_key),
+                                           quest_type=str(qt),
+                                           quest_max=str(quest_max),
+                                           quest_title=str(quest_title))
+
+            # now we use /party and quest_type to figure out our progress!
+            quest_type = cache.get(SECTION_CACHE_QUEST, 'quest_type')
+            if quest_type == 'collect':
+                qp_tmp = quest_data['progress']['collect']
+                quest_progress = qp_tmp.values()[0]
+            elif quest_data['active']:
+                quest_progress = quest_data['progress']['hp']
             else:
-                if 'verbose' in args['<args>']:
-                    print("Already accepted the quest!")
-        else:
-            print("Unknown quest argument '%s'" % (" ".join(args['<args>'])))
-            sys.exit(1)
+                quest_progress = cache.get(SECTION_CACHE_QUEST, 'quest_max')
+
+            if quest_data['active']:
+                quest = '"%s" - %s/%s\n' % (
+                            cache.get(SECTION_CACHE_QUEST, 'quest_title'),
+                            str(int(quest_progress)),
+                            cache.get(SECTION_CACHE_QUEST, 'quest_max'))
+                            
+            else:
+                quest = '%s "%s"' % (
+                            'Preparing',
+                            cache.get(SECTION_CACHE_QUEST, 'quest_title'))
+
+            groupUserStatus = group_user_status(quest_data, auth, hbt)
+
+            len_ljust = 6
+            print('%s %s' % ('\nQuest:'.rjust(len_ljust, ' '), quest))
+            print_gus(groupUserStatus, len_ljust)
+
 
     # Select a pet or mount (v3 ok)
     elif args['<command>'] == 'ride' or args['<command>'] == 'walk':
@@ -1292,21 +1393,32 @@ def cli():
             quest_type = cache.get(SECTION_CACHE_QUEST, 'quest_type')
             if quest_type == 'collect':
                 qp_tmp = party['quest']['progress']['collect']
-                quest_progress = qp_tmp.values()[0]['count']
-            else:
+                quest_progress = qp_tmp.values()[0]
+            elif party['quest']['active']:
                 quest_progress = party['quest']['progress']['hp']
+            else:
+                quest_progress = cache.get(SECTION_CACHE_QUEST, 'quest_max')
 
-            quest = '%s/%s "%s"' % (
-                    str(int(quest_progress)),
-                    cache.get(SECTION_CACHE_QUEST, 'quest_max'),
-                    cache.get(SECTION_CACHE_QUEST, 'quest_title'))
+            if party['quest']['active']:
+                quest = '"%s" - %s/%s' % (
+                            cache.get(SECTION_CACHE_QUEST, 'quest_title'),
+                            str(int(quest_progress)),
+                            cache.get(SECTION_CACHE_QUEST, 'quest_max'))
+                            
+            else:
+                quest = '%s "%s"' % (
+                            'Preparing',
+                            cache.get(SECTION_CACHE_QUEST, 'quest_title'))
+
+
         egg_count = sum(items['eggs'].values())
         potion_count = sum(items['hatchingPotions'].values())
 
-        quest = get_quest_info(cache, hbt, user, party)
+#        quest = get_quest_info(cache, hbt, user, party)
 
         # prepare and print status strings
-        title = 'Level %d %s' % (stats['lvl'], stats['class'].capitalize())
+        title = user['profile']['name']
+        title += ' - Level %d %s' % (stats['lvl'], stats['class'].capitalize())
         if sleeping:
             title += ' (zZZz)'
         health = '%d/%d' % (stats['hp'], stats['maxHealth'])
@@ -1350,7 +1462,6 @@ def cli():
                 groupUserStatus['users'][user][stat] = member['stats'][stat]
             
         groupUserStatus['users'] = OrderedDict(sorted(groupUserStatus['users'].items(), key=lambda t: t[1]['lastactive']))
- 
 
         print('-' * len(title))
         print(title)
