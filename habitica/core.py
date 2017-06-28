@@ -23,6 +23,12 @@ from re import finditer
 from time import sleep, time
 from webbrowser import open_new_tab
 
+from collections import OrderedDict
+import datetime
+import humanize
+import dateutil.parser
+import pytz
+
 from docopt import docopt
 
 from . import api
@@ -1237,6 +1243,7 @@ def cli():
         user = hbt.user()
         party = hbt.groups.party()
         stats = user.get('stats', '')
+        group = hbt.groups(type='party')
         items = user.get('items', '')
         sleeping = user['preferences']['sleep']
         food_count = sum(items['food'].values())
@@ -1318,15 +1325,33 @@ def cli():
         mount = items.get('currentMount', '')
         if not mount:
             mount = DEFAULT_MOUNT
-        summary_items = ('health', 'xp', 'mana', 'quest', 'pet', 'mount')
 
         members = get_members(auth, party)
-        member_health = ', '.join(['%s: %d' % (i['profile']['name'], i['stats']['hp'])
-                                   for i in members
-                                   if i['profile']['name'] != user['profile']['name']])
         summary_items = ('health', 'xp', 'mana', 'currency', 'perishables',
-                         'quest', 'pet', 'mount', 'party health')
+                         'quest', 'pet', 'mount', 'group')
         len_ljust = max(map(len, summary_items)) + 1
+
+        groupUserStatus = {}
+        groupUserStatus['users'] = {}
+        for member in members:
+            user = member['profile']['name']
+            groupUserStatus['users'][user] = {}
+            groupUserStatus.setdefault('longestname', 1)
+            if len(member['profile']['name']) > groupUserStatus['longestname']:
+                    groupUserStatus['longestname'] = len(member['profile']['name'])
+            groupUserStatus['users'][user]['name'] = member['profile']['name']
+            if member['preferences']['sleep']:
+                    groupUserStatus['users'][user]['sleep'] = 'sleeping'
+            else:
+                    groupUserStatus['users'][user]['sleep'] = 'active'
+            groupUserStatus['users'][user]['lastactive'] = member['auth']['timestamps']['loggedin']
+            stats = ['hp', 'maxHealth', 'mp', 'maxMP', 'class']
+            for stat in stats:
+                groupUserStatus['users'][user][stat] = member['stats'][stat]
+            
+        groupUserStatus['users'] = OrderedDict(sorted(groupUserStatus['users'].items(), key=lambda t: t[1]['lastactive']))
+ 
+
         print('-' * len(title))
         print(title)
         print('-' * len(title))
@@ -1338,7 +1363,31 @@ def cli():
         print('%s %s' % ('Pet:'.rjust(len_ljust, ' '), nice_name(pet)))
         print('%s %s' % ('Mount:'.rjust(len_ljust, ' '), nice_name(mount)))
         print('%s %s' % ('Quest:'.rjust(len_ljust, ' '), quest))
-        print('%s %s' % ('Party Health:'.rjust(len_ljust, ' '), member_health))
+        print('%s %s' % ('Group:'.rjust(len_ljust, ' '), group[0]['name']))
+
+        len_ljust += 1
+        headLine = ''.rjust(len_ljust, ' ')
+        headLine += 'Name'.ljust(groupUserStatus['longestname'] + 1)
+        headLine += 'Class'.ljust(9, ' ')
+        headLine += 'Status'.ljust(10, ' ')
+        headLine += 'Last login'.ljust(15, ' ')
+        headLine += 'Health'.ljust(8, ' ')
+        headLine += 'Mana'.ljust(8, ' ')
+        print(headLine)
+
+        print(' '.rjust(len_ljust, ' ') + '-' * (len(headLine) - len_ljust))
+
+        for user in groupUserStatus['users'].values():
+            userLine = ' '.rjust(len_ljust, ' ')
+            userLine += user['name'].ljust(groupUserStatus['longestname'] + 1)
+            userLine += user['class'].capitalize().ljust(9, ' ') 
+            userLine += user['sleep'].ljust(10, ' ')
+            userLine += humanize.naturaltime(datetime.datetime.now(pytz.utc) - dateutil.parser.parse(user['lastactive'])).ljust(15, ' ')
+            userLine += (str(int(user['hp'])) + '/' + str(user['maxHealth'])).ljust(8, ' ')
+            userLine += (str(int(user['mp'])) + '/' + str(user['maxMP'])).ljust(8, ' ')
+            print(userLine)
+
+
 
     # GET/POST habits (v3 ok)
     elif args['<command>'] == 'habits':
