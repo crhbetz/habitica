@@ -268,9 +268,17 @@ def cl_item_count(task):
 
 def print_task_list(tasks):
     for i, task in enumerate(tasks):
-        completed = 'x' if task['completed'] else ' '
-        task_line = '[%s] %s %s' % (completed,
+#        print(json.dumps(task, indent=4))
+        if task['completed']:
+            completed = 'x'
+        elif task['isDue']:
+            completed = '_'
+        else:
+            completed = '/'
+        streak = '*%s' % (task['streak']) if 'streak' in task else ''
+        task_line = '[%s] %s %s\t%s' % (completed,
                                     i + 1,
+                                    streak,
                                     task['text'])
         checklist_available = cl_item_count(task) > 0
         if checklist_available:
@@ -280,7 +288,7 @@ def print_task_list(tasks):
         if checklists_on and checklist_available:
             for c, check in enumerate(task['checklist']):
                 completed = 'x' if check['completed'] else ' '
-                print('    [%s] %s' % (completed,
+                print('\t\t[%s] %s' % (completed,
                                        check['text']))
 
 
