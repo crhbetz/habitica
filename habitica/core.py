@@ -111,7 +111,8 @@ def load_auth(configfile):
     # Config name to authentication name mapping
     mapping = {'url': 'url',
                'login': 'x-api-user',
-               'password': 'x-api-key'
+               'password': 'x-api-key',
+               'checklists': 'checklists'
               }
 
     # Get data from config
@@ -379,7 +380,7 @@ def show_delta(hbt, before, after):
     # Equipment
     bequip = bitems['gear']['equipped']
     aequip = aitems['gear']['equipped']
-    for location, item in aequip.iteritems():
+    for location, item in aequip.items():
         if bequip.get(location, '') != item:
             print("%s now has %s" % (location, item))
 
@@ -414,7 +415,7 @@ def do_item_enumerate(user, requested, ordered=False, pretty=True):
         if len(available) == 0:
             print("You don't have any %s!" % (name))
             continue
-        if isinstance(available, unicode):
+        if isinstance(available, str):
             # This is a singleton, so disable counting.
             counted = False
             if pretty:
@@ -433,7 +434,7 @@ def do_item_enumerate(user, requested, ordered=False, pretty=True):
                     # If false, we may want to skip it...
                     #continue
                     value = True
-                elif isinstance(items[name][item], unicode):
+                elif isinstance(items[name][item], str):
                     result_name += ": %s" % (items[name][item])
                     value = True
                 elif isinstance(items[name][item], int):
@@ -543,7 +544,7 @@ def get_quest_info(cache, hbt, user=None, party=None):
             if content.get('quests', {}).get(quest_key, {}).get('collect'):
                 logging.debug("\tOn a collection type of quest")
                 quest_type = 'collect'
-                for k, v in content['quests'][quest_key]['collect'].iteritems():
+                for k, v in content['quests'][quest_key]['collect'].items():
                     if k not in collect_quest.keys():
                         collect_quest[k] = {}
                     collect_quest[k]['max'] = v['count']
@@ -568,15 +569,15 @@ def get_quest_info(cache, hbt, user=None, party=None):
         if quest_type == 'collect':
             qp_tmp = party['quest']['progress']['collect']
             # For some quests you collect multiple types of things.
-            for k, v in qp_tmp.iteritems():
+            for k, v in qp_tmp.items():
                 quest_progress.append('%s: %s' % (nice_name(k), v))
                 if k not in collect_quest.keys():
                     collect_quest[k] = {}
                 collect_quest[k]['total'] = v
-            for k, v in user['party']['quest']['progress']['collect'].iteritems():
+            for k, v in user['party']['quest']['progress']['collect'].items():
                 collect_quest[k]['current']  = v
             count = 0
-            for k, v in collect_quest.iteritems():
+            for k, v in collect_quest.items():
                 quest += ' %s %d/%d' % (nice_name(k), collect_quest[k]['total'],
                                         int(cache.get(SECTION_CACHE_QUEST, 'quest_max').split(' ')[count]))
                 # If somebody is in the Inn, they will not have collected
@@ -604,8 +605,8 @@ def set_checklists_status(auth, args):
         checklists_on = False
 
     # reverse the config setting if specified by the CLI option
-    if args['--checklists']:
-        checklists_on = not checklists_on
+#    if args['--checklists']:
+#        checklists_on = not checklists_on
 
     return
 
@@ -1227,6 +1228,7 @@ def cli():
 
         # gather status info
         user = hbt.user()
+        party = hbt.groups.party()
         stats = user.get('stats', '')
         items = user.get('items', '')
         sleeping = user['preferences']['sleep']
