@@ -791,7 +791,7 @@ def cli():
                                                    nice_name(mouth), moar))
                     before_user = user
                     feeder = api.Habitica(auth=auth, resource="user", aspect="feed")
-                    for i in range(bites):
+                    for i in range(int(bites)):
                         feeder(_method='post', _one=mouth, _two=food)
                     user = hbt.user()
                     show_delta(hbt, before_user, user)
