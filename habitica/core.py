@@ -1433,7 +1433,7 @@ def cli():
                 habit = api.Habitica(auth=auth, resource="tasks", aspect=habits[tid]['id'])
                 habit(_method='post', _one='score', _two=direction)
                 print('%s habit \'%s\''
-                      % (report, habits[tid]['text'].encode('utf8')))
+                      % (report, habits[tid]['text'])) #.encode('utf8')))
                 if direction == 'up':
                     habits[tid]['value'] = tval + (TASK_VALUE_BASE ** tval)
                 else:
@@ -1442,7 +1442,7 @@ def cli():
 
         for i, task in enumerate(habits):
             score = qualitative_task_score_from_value(task['value'])
-            print('[%s] %s %s' % (score, i + 1, task['text'].encode('utf8')))
+            print('[%s] %s %s' % (score, i + 1, task['text'])) #.encode('utf8')))
 
     # GET/PUT tasks:daily (v3 ok)
     elif args['<command>'] == 'dailies':
@@ -1462,7 +1462,7 @@ def cli():
                 daily = api.Habitica(auth=auth, resource="tasks", aspect=dailies[tid]['id'])
                 daily(_method='post', _one='score', _two=direction)
                 print('marked daily \'%s\' %s'
-                      % (dailies[tid]['text'].encode('utf8'), report))
+                      % (dailies[tid]['text'], report)) #.encode('utf8'))) - for the first string
                 if direction == 'up':
                     dailies[tid]['completed'] = True
                 else:
@@ -1483,7 +1483,7 @@ def cli():
                 todo = api.Habitica(auth=auth, resource="tasks", aspect=todos[tid]['id'])
                 todo(_method='post', _one='score', _two='up')
                 print('marked todo \'%s\' complete'
-                      % todos[tid]['text'].encode('utf8'))
+                      % todos[tid]['text']) #.encode('utf8'))
                 #sleep(HABITICA_REQUEST_WAIT_TIME)
             todos = updated_task_list(todos, tids)
             show_delta(hbt, before_user, hbt.user())
