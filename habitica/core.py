@@ -274,10 +274,11 @@ def cl_item_count(task):
 
 def print_task_list(tasks):
     for i, task in enumerate(tasks):
-#        print(json.dumps(task, indent=4))
         if task['completed']:
             completed = 'x'
-        elif task['isDue']:
+        elif task['type'] == "todo":
+            completed = '_'
+        elif 'isDue' in task.keys() and task['isDue']:
             completed = '_'
         else:
             completed = '/'
