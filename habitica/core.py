@@ -273,6 +273,10 @@ def cl_item_count(task):
 
 
 def print_task_list(tasks):
+    longesttext = 0
+    for task in tasks:
+        if len(task['text']) > longesttext:
+            longesttext = len(task['text'])
     for i, task in enumerate(tasks):
         if task['completed']:
             completed = 'x'
@@ -284,19 +288,29 @@ def print_task_list(tasks):
             completed = '/'
         streak = '*%s' % (task['streak']) if 'streak' in task else ''
         task_line = '[%s] %s %s\t%s' % (completed,
-                                    i + 1,
-                                    streak,
-                                    task['text'])
+                                         i + 1,
+                                         streak,
+                                         task['text'])
         checklist_available = cl_item_count(task) > 0
         if checklist_available:
+            rjust_todo = len(task_line) - len(task['text'])
             task_line += ' (%s/%s)' % (str(cl_done_count(task)),
                                        str(cl_item_count(task)))
+        if task['type'] == "todo" and 'date' in task.keys() and task['date'] != "":
+            task_line = task_line.ljust(longesttext + 9)
+            task_line += 'due %s (%s)' % (humanize.naturaltime(datetime.datetime.now(pytz.utc) - \
+                                                datetime.timedelta(days=1) - \
+                                                dateutil.parser.parse(task['date'])\
+                                                .astimezone(dateutil.tz.tzlocal())),
+                                            humanize.naturaldate(dateutil.parser.parse(task['date'])\
+                                                .astimezone(dateutil.tz.tzlocal())))
         print(task_line)
         if checklists_on and checklist_available:
             for c, check in enumerate(task['checklist']):
-                completed = 'x' if check['completed'] else ' '
-                print('\t\t[%s] %s' % (completed,
-                                       check['text']))
+                completed = 'x' if check['completed'] else '_'
+                print('%s[%s] %s' % ('\t'.rjust(rjust_todo),
+                                     completed,
+                                     check['text']))
 
 
 def qualitative_task_score_from_value(value):
