@@ -19,7 +19,7 @@ import os.path
 import random
 import sys
 from operator import itemgetter
-from re import finditer
+import re
 from time import sleep, time
 from webbrowser import open_new_tab
 
@@ -205,7 +205,7 @@ def nice_name(thing):
         thing = thing.replace('_', '-')
     prettied = " ".join(thing.split('-')[::-1])
     # split camel cased words
-    matches = finditer('.+?(?:(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|$)',
+    matches = re.finditer('.+?(?:(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|$)',
                         prettied)
     prettier = ' '.join([m.group(0).title() for m in matches])
     return prettier
@@ -308,7 +308,8 @@ def print_task_list(tasks):
         if checklists_on and checklist_available:
             for c, check in enumerate(task['checklist']):
                 completed = 'x' if check['completed'] else '_'
-                print('%s[%s] %s' % ('\t'.rjust(rjust_todo),
+                print('%s%s [%s] %s' % ('\t'.rjust(rjust_todo),
+                                     chr(ord('a') - 1 + c + 1),
                                      completed,
                                      check['text']))
 
@@ -554,6 +555,21 @@ def set_checklists_status(auth, args):
 #        checklists_on = not checklists_on
 
     return
+
+def isChecklistItem(tid):
+#    checklist = re.compile(r'^[0-9][a-z]$')
+    if re.search(r'^[0-9]+[a-z]$', tid) != None:
+        number = ord(re.search(r'[a-z]', tid).group(0)) - 97 #for char in re.findall(r'[a-z]{1}', tid)
+        ttid = int(re.match(r'[0-9]+', tid).group(0)) - 1
+        logging.debug('found checklist item, number %s of task %s' 
+                      % (number, ttid))
+        return ttid, number
+    elif re.search(r'^[0-9]+$', tid) != None:
+        logging.debug('false')
+        return False
+    else:
+        logging.debug('None')
+        return None
 
 def group_user_status(quest_data, auth, hbt):
     groupUserStatus = {}
@@ -1154,7 +1170,7 @@ def cli():
                                                  {}).get('collect'):
                     logging.debug("\tOn a collection type of quest")
                     qt = 'collect'
-                    clct = content['quests'][quest_key][qt].values()[0]
+                    clct = list(content['quests'][quest_key][qt].values())[0]
                     quest_max = clct['count']
                 # else if it's a boss, then hit up
                 # content/quests/<quest_key>/boss/hp
@@ -1173,7 +1189,7 @@ def cli():
 
             # now we use /party and quest_type to figure out our progress!
             quest_type = cache.get(SECTION_CACHE_QUEST, 'quest_type')
-            if quest_type == 'collect':
+            if quest_type == 'collect' and quest_data['active']:
                 qp_tmp = quest_data['progress']['collect']
                 quest_progress = qp_tmp.values()[0]
             elif quest_data['active']:
@@ -1285,8 +1301,7 @@ def cli():
         # cache info about the current quest in cache.
         quest = 'Not currently on a quest'
         if (party is not None and
-                party.get('quest', '') and
-                party.get('quest').get('active')):
+                party.get('quest', '')): 
 
             quest_key = party['quest']['key']
 
@@ -1322,7 +1337,7 @@ def cli():
 
             # now we use /party and quest_type to figure out our progress!
             quest_type = cache.get(SECTION_CACHE_QUEST, 'quest_type')
-            if quest_type == 'collect':
+            if quest_type == 'collect' and party['quest']['active']:
                 qp_tmp = party['quest']['progress']['collect']
                 quest_progress = qp_tmp.values()[0]
             elif party['quest']['active']:
@@ -1472,17 +1487,33 @@ def cli():
 
         if direction != None:
             before_user = hbt.user()
-            tids = get_task_ids(args['<args>'][1:])
+#            tids = get_task_ids(args['<args>'][1:])
+            tids = args['<args>'][1:]  
             for tid in tids:
-                daily = api.Habitica(auth=auth, resource="tasks", aspect=dailies[tid]['id'])
-                daily(_method='post', _one='score', _two=direction)
-                print('marked daily \'%s\' %s'
-                      % (dailies[tid]['text'], report)) #.encode('utf8'))) - for the first string
-                if direction == 'up':
-                    dailies[tid]['completed'] = True
+                checklistItem = isChecklistItem(tid)
+                if checklistItem == False:
+                    tid = int(tid) - 1
+                    daily = api.Habitica(auth=auth, resource="tasks", aspect=dailies[tid]['id'])
+                    daily(_method='post', _one='score', _two=direction)
+                    print('marked daily \'%s\' %s'
+                          % (dailies[tid]['text'], report)) #.encode('utf8'))) - for the first string
+                    if direction == 'up':
+                        dailies[tid]['completed'] = True
+                    else:
+                        dailies[tid]['completed'] = False
+                    #sleep(HABITICA_REQUEST_WAIT_TIME)
+                elif checklistItem == None:
+                    print('Could not parse argument \'%s\' - ignoring it!' % tid)
                 else:
-                    dailies[tid]['completed'] = False
-                #sleep(HABITICA_REQUEST_WAIT_TIME)
+                    checklist = api.Habitica(auth=auth, resource="tasks", 
+                                             aspect=dailies[checklistItem[0]]['id'])
+                    print('toggled checklist item \'%s\' of daily \'%s\''
+                          % (dailies[checklistItem[0]]['checklist'][checklistItem[1]]['text'],
+                             dailies[checklistItem[0]]['text']))
+                    checklist(_method='post', _one='checklist',
+                        _two=dailies[checklistItem[0]]['checklist'][checklistItem[1]]['id'] + '/score')
+                    dailies[checklistItem[0]]['checklist'][checklistItem[1]]['completed'] = \
+                        not dailies[checklistItem[0]]['checklist'][checklistItem[1]]['completed']
             show_delta(hbt, before_user, hbt.user())
 
         print_task_list(dailies)
@@ -1493,14 +1524,29 @@ def cli():
                  if not e['completed']]
         if 'done' in args['<args>']:
             before_user = hbt.user()
-            tids = get_task_ids(args['<args>'][1:])
+#            tids = get_task_ids(args['<args>'][1:])
+            tids = args['<args>'][1:]
             for tid in tids:
-                todo = api.Habitica(auth=auth, resource="tasks", aspect=todos[tid]['id'])
-                todo(_method='post', _one='score', _two='up')
-                print('marked todo \'%s\' complete'
-                      % todos[tid]['text']) #.encode('utf8'))
-                #sleep(HABITICA_REQUEST_WAIT_TIME)
-            todos = updated_task_list(todos, tids)
+                checklistItem = isChecklistItem(tid)
+                if checklistItem == False:
+                    todo = api.Habitica(auth=auth, resource="tasks", aspect=todos[tid]['id'])
+                    todo(_method='post', _one='score', _two='up')
+                    print('marked todo \'%s\' complete'
+                          % todos[tid]['text']) #.encode('utf8'))
+                    #sleep(HABITICA_REQUEST_WAIT_TIME)
+                    todos = updated_task_list(todos, tids)
+                elif checklistItem == None:
+                    print('Could not parse argument \'%s\' - ignoring it!' % tid)
+                else:
+                    checklist = api.Habitica(auth=auth, resource="tasks",
+                                             aspect=todos[checklistItem[0]]['id'])
+                    print('toggled checklist item \'%s\' of daily \'%s\''
+                          % (todos[checklistItem[0]]['checklist'][checklistItem[1]]['text'],
+                             todos[checklistItem[0]]['text']))
+                    checklist(_method='post', _one='checklist',
+                        _two=todos[checklistItem[0]]['checklist'][checklistItem[1]]['id'] + '/score')
+                    todos[checklistItem[0]]['checklist'][checklistItem[1]]['completed'] = \
+                        not todos[checklistItem[0]]['checklist'][checklistItem[1]]['completed']
             show_delta(hbt, before_user, hbt.user())
         elif 'get' in args['<args>']:
             tids = get_task_ids(args['<args>'][1:])
