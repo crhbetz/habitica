@@ -1300,6 +1300,7 @@ def cli():
         items = user.get('items', '')
         sleeping = user['preferences']['sleep']
         food_count = sum(items['food'].values())
+        newMessages = user.get('newMessages', '')
         # gather quest progress information (yes, janky. the API
         # doesn't make this stat particularly easy to grab...).
         # because hitting /content downloads a crapload of stuff, we
@@ -1413,9 +1414,18 @@ def cli():
             
         groupUserStatus['users'] = OrderedDict(sorted(groupUserStatus['users'].items(), key=lambda t: t[1]['lastactive']))
 
-        print('-' * len(title))
+        messages = 'No new messages.'
+        if newMessages:
+            messages = 'New messages in '
+            for message in newMessages.values():
+                messages = messages + message['name'] + ', '
+            messages = messages[:-2] + '!'
+
+        print('=' * len(title))
         print(title)
-        print('-' * len(title))
+        print('=' * len(title))
+        print(messages)
+        print('-' * max(len(messages), len(title)))
         print('%s %s' % ('Health:'.rjust(len_ljust, ' '), health))
         print('%s %s' % ('XP:'.rjust(len_ljust, ' '), xp))
         print('%s %s' % ('Mana:'.rjust(len_ljust, ' '), mana))
