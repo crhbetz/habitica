@@ -28,6 +28,7 @@ import datetime
 import humanize
 import dateutil.parser
 import pytz
+import textwrap
 
 from docopt import docopt
 
@@ -679,6 +680,10 @@ def cli():
     arise                      Check out of the inn
     quest                      Report quest details
     quest accept               Accept a quest proposal
+    chat list                  List available chats and their ID
+    chat show [<id>] [<num>]   Shows last <num> messages from chat <id>
+                               (defaults: ID 0, num 5)
+    chat send <id> "<Message>" Sends Message to chat ID 
 
   For `habits up|down`, `dailies done|undo`, and `todos done`, you can pass
   one or more <task-id> parameters, using either comma-separated lists or
@@ -1572,6 +1577,63 @@ def cli():
                 sleep(HABITICA_REQUEST_WAIT_TIME)
             todos = updated_task_list(todos, tids)
         print_task_list(todos)
+
+    elif args['<command>'] == 'chat':           
+        user = hbt.user()
+        guilds = user.get('guilds')
+        
+        if args['<args>'][0] == 'list':
+            print('0 %s' % hbt.groups.party()['name'])
+            for i in range(len(guilds)):
+                print('%d %s' % (i + 1,
+                                 getattr(hbt.groups, guilds[i])()['name']))
+        
+        if args['<args>'][0] == 'show':
+            if len(args['<args>']) > 3 or len(args['<args>']) < 0:
+                print('Invalid number of arguments! Must be group number \
+                      + (optional) number of messages to show.')
+                sys.exit(1)
+            elif len(args['<args>']) == 1:
+                party = user.get('party')['_id'] 
+                messageNum = 5
+            elif len(args['<args>']) == 2:
+                messageNum = 5
+                if args['<args>'][1] == '0':
+                    party = user.get('party')['_id']
+                else:
+                    party = guilds[int(args['<args>'][1])-1]
+            else:
+                messageNum = int(args['<args>'][2])
+                if args['<args>'][1] == '0':
+                    party = user.get('party')['_id']
+                else:
+                    party = guilds[int(args['<args>'][1])-1]
+
+            chat = api.Habitica(auth=auth, resource="groups", aspect=party)
+            messages = chat(_one='chat')
+            messages = sorted(messages, key=lambda k: k['timestamp']) 
+            messages = messages[-messageNum:]
+            for message in messages:
+                name = message['user'] if 'user' in message.keys() else 'System'
+                timestamp = int(str(message['timestamp'])[0:10])
+                print('\n%s, %s:\n%s' % (name,
+                                        humanize.naturaltime(datetime.datetime.now() \
+                                         - datetime.datetime.fromtimestamp(timestamp)),
+                                        textwrap.fill(message['text'], width=80)))
+        if args['<args>'][0] == 'send':
+            party = int(args['<args>'][1])
+            if party > 0:
+                party = guilds[int(args['<args>'][1])-1]
+            elif party == 0:
+                party = user.get('party')['_id']
+            else:
+                print('Invalid ID - must be 0 for party or > 0. \
+                      Use \'habitica chat list\' to get a list of IDs.')
+                sys.exit(1)
+
+            chat = api.Habitica(auth=auth, resource="groups", aspect=party)
+            send = chat(message=args['<args>'][2:], _method='post', _one='chat')
+
 
     else:
         print("Unknown command '%s'" % (args['<command>']))
