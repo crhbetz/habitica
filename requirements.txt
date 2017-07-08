@@ -1,2 +1,6 @@
-docopt
-requests
+setuptools==2.2
+humanize==0.5.1
+requests==2.14.2
+pytz==2017.2
+docopt==0.6.2
+python_dateutil==2.6.0

@@ -47,44 +47,46 @@ class Habitica(object):
         # get involved in the API itself and... help it.
         if self.aspect:
             aspect_id = kwargs.pop('_id', None)
-            resource_id = kwargs.pop('_id2', None)
             direction = kwargs.pop('_direction', None)
-            uri = '%s/%s' % (self.auth['url'],
-                             API_URI_BASE)
             if aspect_id is not None:
-                uri = '%s/%s/%s/%s' % (uri,
-                                       self.aspect,
-                                       str(aspect_id),
-                                       self.resource)
-                if method == 'put':
-                    uri = uri.replace('/user','') # Remove 'user' when updating tasks.
-                if resource_id is not None:
-                    uri = '%s/%s' % (uri,
-                                     str(resource_id))
-                    if self.resource == 'checklist':
-                        uri = uri + '/score'
-            elif self.aspect == 'tasks':
-                uri = '%s/%s/%s' % (uri,
-                                    self.aspect,
-                                    self.resource)
+                uri = '%s/%s/%s/%s/%s' % (self.auth['url'],
+                                          API_URI_BASE,
+                                          self.resource,
+                                          self.aspect,
+                                          str(aspect_id))
+            arg_one = kwargs.pop('_one', None)
+            arg_two = kwargs.pop('_two', None)
+            uri = '%s/%s' % (self.auth['url'], API_URI_BASE)
+            if arg_one is not None:
+                uri += '/%s/%s/%s' % (self.resource, self.aspect,
+                                      str(arg_one))
             else:
-                uri = '%s/%s/%s' % (uri,
-                                    self.resource,
-                                    self.aspect)
+                uri = '%s/%s/%s/%s' % (self.auth['url'],
+                                       API_URI_BASE,
+                                       self.resource,
+                                       self.aspect)
             if direction is not None:
-                uri = uri.replace('/user','') # Remove 'user' when scoring tasks.
-                uri = '%s/score/%s' % (uri, direction)
-                
+                uri = '%s/%s' % (uri, direction)
+                uri += '/%s/%s' % (self.resource, self.aspect)
+            if arg_two is not None:
+                uri = '%s/%s' % (uri, arg_two)
         else:
             uri = '%s/%s/%s' % (self.auth['url'],
                                 API_URI_BASE,
                                 self.resource)
-
+        #print(uri)
         # actually make the request of the API
-        if method in ['put', 'post', 'delete']:
+        if method in ['put', 'post'] and self.aspect \
+                not in ['class', 'inventory']:
+            if 'batch-update' in self.aspect:
+                data = json.dumps(kwargs.pop('ops', []))
+            else:
+                data = json.dumps(kwargs)
+            #print(data)
             res = getattr(requests, method)(uri, headers=self.headers,
-                                            data=json.dumps(kwargs))
+                                            data=data)
         else:
+            # from ipdb import set_trace; set_trace()
             res = getattr(requests, method)(uri, headers=self.headers,
                                             params=kwargs)
 
@@ -95,4 +97,5 @@ class Habitica(object):
             else:
                 return None
         else:
+            print(res.url)
             res.raise_for_status()
