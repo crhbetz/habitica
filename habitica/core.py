@@ -1154,6 +1154,7 @@ def cli():
     #Quest manipulations
     elif args['<command>'] == 'quest':
         # if on a quest with the party, grab quest info
+        user = hbt.user()
         group = hbt.groups(type='party')
         party_id = group[0]['id']
         quest_data = getattr(hbt.groups, party_id)()['quest']
@@ -1196,17 +1197,21 @@ def cli():
             quest_type = cache.get(SECTION_CACHE_QUEST, 'quest_type')
             if quest_type == 'collect' and quest_data['active']:
                 qp_tmp = quest_data['progress']['collect']
-                quest_progress = qp_tmp.values()[0]
+                if type(qp_tmp) is not dict:
+                    quest_progress = qp_tmp.values()[0]
+                else:
+                    quest_progress = list(qp_tmp.values())[0]
             elif quest_data['active']:
                 quest_progress = quest_data['progress']['hp']
             else:
                 quest_progress = cache.get(SECTION_CACHE_QUEST, 'quest_max')
 
             if quest_data['active']:
-                quest = '"%s" - %s/%s' % (
-                            cache.get(SECTION_CACHE_QUEST, 'quest_title'),
-                            str(int(quest_progress)),
-                            cache.get(SECTION_CACHE_QUEST, 'quest_max'))
+                quest = '"%s" - %s/%s (-%s)' % (
+                        cache.get(SECTION_CACHE_QUEST, 'quest_title'),
+                        str(int(quest_progress)),
+                        cache.get(SECTION_CACHE_QUEST, 'quest_max'),
+                        str(int(user['party']['quest']['progress']['up'])))
                             
             else:
                 quest = '%s "%s"' % (
@@ -1345,7 +1350,10 @@ def cli():
             quest_type = cache.get(SECTION_CACHE_QUEST, 'quest_type')
             if quest_type == 'collect' and party['quest']['active']:
                 qp_tmp = party['quest']['progress']['collect']
-                quest_progress = qp_tmp.values()[0]
+                if type(qp_tmp) is not dict:
+                    quest_progress = qp_tmp.values()[0]
+                else:
+                    quest_progress = list(qp_tmp.values())[0]
             elif party['quest']['active']:
                 quest_progress = party['quest']['progress']['hp']
             else:
