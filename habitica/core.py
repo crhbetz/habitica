@@ -1480,6 +1480,7 @@ def cli():
             direction = 'down'
 
         if direction != None:
+            before_user = hbt.user()
             tids = get_task_ids(args['<args>'][1:])
             for tid in tids:
                 tval = habits[tid]['value']
@@ -1492,6 +1493,7 @@ def cli():
                 else:
                     habits[tid]['value'] = tval - (TASK_VALUE_BASE ** tval)
                 #sleep(HABITICA_REQUEST_WAIT_TIME)
+            show_delta(hbt, before_user, hbt.user())
 
         for i, task in enumerate(habits):
             score = qualitative_task_score_from_value(task['value'])
