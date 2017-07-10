@@ -1042,6 +1042,8 @@ def cli():
             report['mounts'] = items['mounts']
         if 'content' in wanted:
             report['content'] = hbt.content()
+        if 'tasks' in wanted:
+            report['tasks'] = hbt.tasks.user()
 
         # Dump the report.
         print(json.dumps(report, indent=4, sort_keys=True))
