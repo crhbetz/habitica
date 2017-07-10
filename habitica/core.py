@@ -273,7 +273,7 @@ def cl_item_count(task):
         return 0
 
 
-def print_task_list(tasks):
+def print_task_list(tasks, needsCron = False):
     longesttext = 0
     for task in tasks:
         if len(task['text']) > longesttext:
@@ -305,7 +305,14 @@ def print_task_list(tasks):
                                                 .astimezone(dateutil.tz.tzlocal())),
                                             humanize.naturaldate(dateutil.parser.parse(task['date'])\
                                                 .astimezone(dateutil.tz.tzlocal())))
-        print(task_line)
+        if not needsCron:
+            print(task_line)
+        elif not task['type'] == "daily":
+            print(task_line)
+        elif task['yesterDaily'] and not task['completed']:
+            print(task_line)
+        else:
+            continue
         if checklists_on and checklist_available:
             for c, check in enumerate(task['checklist']):
                 completed = 'x' if check['completed'] else '_'
@@ -1306,6 +1313,7 @@ def cli():
         sleeping = user['preferences']['sleep']
         food_count = sum(items['food'].values())
         newMessages = user.get('newMessages', '')
+        yesterdayMessage = 'Beware! You are currently recording yesterday\'s activity! Please use the dailies command!'
         # gather quest progress information (yes, janky. the API
         # doesn't make this stat particularly easy to grab...).
         # because hitting /content downloads a crapload of stuff, we
@@ -1405,20 +1413,20 @@ def cli():
         groupUserStatus = {}
         groupUserStatus['users'] = {}
         for member in members:
-            user = member['profile']['name']
-            groupUserStatus['users'][user] = {}
+            name = member['profile']['name']
+            groupUserStatus['users'][name] = {}
             groupUserStatus.setdefault('longestname', 1)
             if len(member['profile']['name']) > groupUserStatus['longestname']:
                     groupUserStatus['longestname'] = len(member['profile']['name'])
-            groupUserStatus['users'][user]['name'] = member['profile']['name']
+            groupUserStatus['users'][name]['name'] = member['profile']['name']
             if member['preferences']['sleep']:
-                    groupUserStatus['users'][user]['sleep'] = 'sleeping'
+                    groupUserStatus['users'][name]['sleep'] = 'sleeping'
             else:
-                    groupUserStatus['users'][user]['sleep'] = 'active'
-            groupUserStatus['users'][user]['lastactive'] = member['auth']['timestamps']['loggedin']
+                    groupUserStatus['users'][name]['sleep'] = 'active'
+            groupUserStatus['users'][name]['lastactive'] = member['auth']['timestamps']['loggedin']
             stats = ['hp', 'maxHealth', 'mp', 'maxMP', 'class']
             for stat in stats:
-                groupUserStatus['users'][user][stat] = member['stats'][stat]
+                groupUserStatus['users'][name][stat] = member['stats'][stat]
             
         groupUserStatus['users'] = OrderedDict(sorted(groupUserStatus['users'].items(), key=lambda t: t[1]['lastactive']))
 
@@ -1434,6 +1442,9 @@ def cli():
         print('=' * len(title))
         print(messages)
         print('-' * max(len(messages), len(title)))
+        if user['needsCron']:
+            print(yesterdayMessage)
+            print('-' * max(len(yesterdayMessage), len(messages)))
         print('%s %s' % ('Health:'.rjust(len_ljust, ' '), health))
         print('%s %s' % ('XP:'.rjust(len_ljust, ' '), xp))
         print('%s %s' % ('Mana:'.rjust(len_ljust, ' '), mana))
@@ -1539,9 +1550,22 @@ def cli():
                         _two=dailies[checklistItem[0]]['checklist'][checklistItem[1]]['id'] + '/score')
                     dailies[checklistItem[0]]['checklist'][checklistItem[1]]['completed'] = \
                         not dailies[checklistItem[0]]['checklist'][checklistItem[1]]['completed']
-            show_delta(hbt, before_user, hbt.user())
+            user = hbt.user()
+            show_delta(hbt, before_user, user)
 
-        print_task_list(dailies)
+        try:
+            user
+        except NameError:
+            user = hbt.user()
+
+        if user['needsCron']:
+            yesterdayMessage = ('You left these Dailies unchecked yesterday! '
+                                'Do you want to check off any of them now? When you\'re done, start a new '
+                                'day using \'habitica newday\'!')
+            print('-' * min(len(yesterdayMessage), 80))
+            print(textwrap.fill(yesterdayMessage, width=80))
+            print('-' * min(len(yesterdayMessage), 80))
+        print_task_list(dailies, needsCron=user['needsCron'])
 
     # handle todo items (v3 ok)
     elif args['<command>'] == 'todos':
@@ -1653,6 +1677,15 @@ def cli():
 
             chat = api.Habitica(auth=auth, resource="groups", aspect=party)
             send = chat(message=args['<args>'][2:], _method='post', _one='chat')
+
+    elif args['<command>'] == 'newday':
+        user = hbt.user()
+        if user['needsCron']:
+            print('Moving to the current day ...')
+            newday = hbt.cron(data="none", _method="post")
+            show_delta(hbt, user, hbt.user())
+        else:
+            print('We\'re already working the current day. Doing nothing!')
 
 
     else:
