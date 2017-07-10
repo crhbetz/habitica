@@ -659,6 +659,7 @@ def cli():
     dailies                    List daily tasks
     dailies done               Mark daily <task-id> complete
     dailies undo               Mark daily <task-id> incomplete
+    newday                     Finish recording yesterday's activity
     todos                      List todo tasks
     todos done <task-id>       Mark one or more todo <task-id> completed
     todos add <task>           Add todo with description <task>
