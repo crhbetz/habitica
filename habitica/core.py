@@ -56,6 +56,7 @@ SETTINGS_CONF = os.path.expanduser('~') + '/.config/habitica/settings.cfg'
 
 SECTION_HABITICA = 'Habitica'
 SECTION_CACHE_QUEST = 'Quest'
+SECTION_CACHE_GUILDNAMES = 'Guildnames'
 checklists_on = False
 
 DEFAULT_PARTY = 'Not currently in a party'
@@ -161,6 +162,9 @@ def load_cache(configfile):
     if not cache.has_section(SECTION_CACHE_QUEST):
         cache.add_section(SECTION_CACHE_QUEST)
 
+    if not cache.has_section(SECTION_CACHE_GUILDNAMES):
+        cache.add_section(SECTION_CACHE_GUILDNAMES)
+
     return cache
 
 
@@ -178,6 +182,21 @@ def update_quest_cache(configfile, **kwargs):
     cache.read(configfile)
 
     return cache
+
+def update_guildnames_cache(configfile, number, name):
+    logging.debug('Updating (and caching) config data (%s)...' % configfile)
+
+    cache = load_cache(configfile)
+
+    cache.set(SECTION_CACHE_GUILDNAMES, number, name)
+
+    with open(configfile, 'w') as f:
+        cache.write(f)
+
+    cache.read(configfile)
+
+    return cache
+
 
 
 def get_task_ids(tids):
@@ -1605,7 +1624,16 @@ def cli():
         if args['<args>'][0] == 'list':
             print('0 %s' % hbt.groups.party()['name'])
             for i in range(len(guilds)):
-                print('%d %s' % (i + 1,
+                try:
+                    name = cache.get(SECTION_CACHE_GUILDNAMES, guilds[i])
+                    print('%d %s' % (i + 1, name))
+
+                except configparser.NoOptionError:
+                    name = getattr(hbt.groups, guilds[i])()['name']
+                    cache = update_guildnames_cache(CACHE_CONF,
+                                           number=guilds[i],
+                                           name=name) 
+                    print('%d %s' % (i + 1,
                                  getattr(hbt.groups, guilds[i])()['name']))
         
         if args['<args>'][0] == 'show':
