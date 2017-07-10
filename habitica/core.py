@@ -1631,6 +1631,7 @@ def cli():
 
             chat = api.Habitica(auth=auth, resource="groups", aspect=party)
             messages = chat(_one='chat')
+            chat(_method='post', _one='chat', _two='seen')
             messages = sorted(messages, key=lambda k: k['timestamp']) 
             messages = messages[-messageNum:]
             for message in messages:
