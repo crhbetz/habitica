@@ -1159,12 +1159,6 @@ def cli():
         group = hbt.groups(type='party')
         party_id = group[0]['id']
         quest_data = getattr(hbt.groups, party_id)()['quest']
-        if 'forcestart' in args['<args>']:
-            party = api.Habitica(auth=auth, resource='groups', aspect='party')
-            quest_data = party(_method='post', _one='quests', _two='force-start')
-            if quest_data == None:
-                print('Could not force-start the quest!')
-                sys.exit(1)
         if quest_data:
             quest_key = quest_data['key']
 
@@ -1230,6 +1224,20 @@ def cli():
             len_ljust = 6
             print('%s %s' % ('Quest:'.rjust(len_ljust, ' '), quest))
             print_gus(groupUserStatus, len_ljust)
+
+            if 'forcestart' in args['<args>']:
+                if quest_data['active']:
+                   print('Can\'t force-start: Quest is already active.')
+                else:
+                    response = input('\nDo you really want to start the quest now?'
+                           '\nOnly members who accepted the invitation will take part! (y/N)\n')
+                    if response.capitalize() != 'Y':
+                        print('Aborting force start.')
+                    else:
+                        party = api.Habitica(auth=auth, resource='groups', aspect='party')
+                        quest_data = party(_method='post', _one='quests', _two='force-start')
+                        if quest_data == None:
+                            print('Could not force-start the quest!')
 
 
     # Select a pet or mount (v3 ok)
