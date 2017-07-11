@@ -680,6 +680,7 @@ def cli():
     arise                      Check out of the inn
     quest                      Report quest details
     quest accept               Accept a quest proposal
+    quest forcestart           Quest/Group-Leader only: start quest immediately
     chat list                  List available chats and their ID
     chat show [<id>] [<num>]   Shows last <num> messages from chat <id>
                                (defaults: ID 0, num 5)
@@ -1158,6 +1159,12 @@ def cli():
         group = hbt.groups(type='party')
         party_id = group[0]['id']
         quest_data = getattr(hbt.groups, party_id)()['quest']
+        if 'forcestart' in args['<args>']:
+            party = api.Habitica(auth=auth, resource='groups', aspect='party')
+            quest_data = party(_method='post', _one='quests', _two='force-start')
+            if quest_data == None:
+                print('Could not force-start the quest!')
+                sys.exit(1)
         if quest_data:
             quest_key = quest_data['key']
 
