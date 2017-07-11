@@ -1623,18 +1623,28 @@ def cli():
         
         if args['<args>'][0] == 'list':
             print('0 %s' % hbt.groups.party()['name'])
-            for i in range(len(guilds)):
-                try:
-                    name = cache.get(SECTION_CACHE_GUILDNAMES, guilds[i])
+            if 'timestamp' in cache['Guildnames'].keys() and \
+             time() - float(cache['Guildnames']['timestamp']) < 604800:
+                for i in range(len(guilds)):
+                    try:
+                        name = cache.get(SECTION_CACHE_GUILDNAMES, guilds[i])
+                    except configparser.NoOptionError:
+                        name = getattr(hbt.groups, guilds[i])()['name']
+                        cache = update_guildnames_cache(CACHE_CONF,
+                                               number=guilds[i],
+                                               name=name)
                     print('%d %s' % (i + 1, name))
 
-                except configparser.NoOptionError:
+            else:
+                cache = update_guildnames_cache(CACHE_CONF,
+                                          number='timestamp',
+                                          name=str(time()))
+                for i in range(len(guilds)):
                     name = getattr(hbt.groups, guilds[i])()['name']
                     cache = update_guildnames_cache(CACHE_CONF,
-                                           number=guilds[i],
-                                           name=name) 
-                    print('%d %s' % (i + 1,
-                                 getattr(hbt.groups, guilds[i])()['name']))
+                                               number=guilds[i],
+                                               name=name)
+                    print('%d %s' % (i + 1, name))
         
         if args['<args>'][0] == 'show':
             if len(args['<args>']) > 3 or len(args['<args>']) < 0:
