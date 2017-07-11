@@ -1693,6 +1693,18 @@ def cli():
             chat = api.Habitica(auth=auth, resource="groups", aspect=party)
             send = chat(message=args['<args>'][2:], _method='post', _one='chat')
 
+            messages = chat(_one='chat')
+            chat(_method='post', _one='chat', _two='seen')
+            messages = sorted(messages, key=lambda k: k['timestamp']) 
+            messages = messages[-5:]
+            for message in messages:
+                name = message['user'] if 'user' in message.keys() else 'System'
+                timestamp = int(str(message['timestamp'])[0:10])
+                print('\n%s, %s:\n%s' % (name,
+                                        humanize.naturaltime(datetime.datetime.now() \
+                                         - datetime.datetime.fromtimestamp(timestamp)),
+                                        textwrap.fill(message['text'], width=80)))
+
 
     else:
         print("Unknown command '%s'" % (args['<command>']))
