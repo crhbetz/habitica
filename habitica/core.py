@@ -1446,7 +1446,10 @@ def cli():
         if newMessages:
             messages = 'New messages in '
             for gid, message in newMessages.items():
-                messages = messages + message['name'] + '(' + str(guilds.index(gid)+1) + '), '
+                if gid != party['id']:
+                    messages = messages + message['name'] + '(' + str(guilds.index(gid)+1) + '), '
+                else:
+                    messages = messages + message['name'] + '(0), '
             messages = messages[:-2] + '!'
 
         print('=' * len(title))
