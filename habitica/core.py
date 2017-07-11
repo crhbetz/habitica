@@ -309,7 +309,7 @@ def print_task_list(tasks, needsCron = False):
             print(task_line)
         elif not task['type'] == "daily":
             print(task_line)
-        elif task['yesterDaily'] and not task['completed']:
+        elif task['yesterDaily'] and not task['completed'] and task['isDue']:
             print(task_line)
         else:
             continue
