@@ -1318,6 +1318,7 @@ def cli():
 
         # gather status info
         user = hbt.user()
+        guilds = user.get('guilds')
         party = hbt.groups.party()
         stats = user.get('stats', '')
         group = hbt.groups(type='party')
@@ -1444,8 +1445,8 @@ def cli():
         messages = 'No new messages.'
         if newMessages:
             messages = 'New messages in '
-            for message in newMessages.values():
-                messages = messages + message['name'] + ', '
+            for gid, message in newMessages.items():
+                messages = messages + message['name'] + '(' + str(guilds.index(gid)+1) + '), '
             messages = messages[:-2] + '!'
 
         print('=' * len(title))
