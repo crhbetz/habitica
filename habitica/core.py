@@ -648,6 +648,41 @@ def print_gus(groupUserStatus, len_ljust):
         userLine += (str(int(user['mp'])) + '/' + str(user['maxMP'])).ljust(8, ' ')
         print(userLine)
 
+def chatID(party, user, guilds):
+    message = ('Invalid ID - must be 0 for party or > 0.\n'
+              'Use \'habitica chat list\' to get a list of IDs.')
+    try:
+        party = int(party)
+    except ValueError:
+        print(message)
+        sys.exit(1)
+
+    if party > 0:
+         try:
+             party = guilds[int(party)-1]
+             return party
+         except IndexError:
+             print('ID too high - you\'re not a member '
+                   'in this many guilds.')
+             sys.exit(1)
+    elif party == 0:
+         party = user.get('party')['_id']
+         return party
+    else:
+        print(message)
+        sys.exit(1)
+
+def printChatMessages(messages, messageNum):
+    messages = sorted(messages, key=lambda k: k['timestamp']) 
+    messages = messages[-messageNum:]
+    for message in messages:
+        name = message['user'] if 'user' in message.keys() else 'System'
+        timestamp = int(str(message['timestamp'])[0:10])
+        print('\n%s, %s:\n%s' % (name,
+                                humanize.naturaltime(datetime.datetime.now() \
+                                - datetime.datetime.fromtimestamp(timestamp)),
+                                textwrap.fill(message['text'], width=80)))
+
 
 def cli():
     """Habitica command-line interface.
@@ -1455,7 +1490,7 @@ def cli():
         print('=' * len(title))
         print(title)
         print('=' * len(title))
-        print(messages)
+        print(textwrap.fill(messages, width=80))
         print('-' * max(len(messages), len(title)))
         print('%s %s' % ('Health:'.rjust(len_ljust, ' '), health))
         print('%s %s' % ('XP:'.rjust(len_ljust, ' '), xp))
@@ -1650,64 +1685,37 @@ def cli():
                                                name=name)
                     print('%d %s' % (i + 1, name))
         
-        if args['<args>'][0] == 'show':
-            if len(args['<args>']) > 3 or len(args['<args>']) < 0:
-                print('Invalid number of arguments! Must be group number \
-                      + (optional) number of messages to show.')
+        elif args['<args>'][0] == 'show':
+            messageNum = 5
+            if len(args['<args>']) > 3 or len(args['<args>']) < 0: 
+                print('Invalid number of arguments! Must be group number '
+                      '+ (optional) number of messages to show.')
                 sys.exit(1)
             elif len(args['<args>']) == 1:
                 party = user.get('party')['_id'] 
-                messageNum = 5
             elif len(args['<args>']) == 2:
-                messageNum = 5
-                if args['<args>'][1] == '0':
-                    party = user.get('party')['_id']
-                else:
-                    party = guilds[int(args['<args>'][1])-1]
+                party = chatID(args['<args>'][1], user, guilds)
             else:
-                messageNum = int(args['<args>'][2])
-                if args['<args>'][1] == '0':
-                    party = user.get('party')['_id']
-                else:
-                    party = guilds[int(args['<args>'][1])-1]
+                try:
+                    messageNum = int(args['<args>'][2])
+                except ValueError:
+                    print('Number of messages must be a number!')
+                    sys.exit(1)
+                party = chatID(args['<args>'][1], user, guilds)
 
             chat = api.Habitica(auth=auth, resource="groups", aspect=party)
             messages = chat(_one='chat')
             chat(_method='post', _one='chat', _two='seen')
-            messages = sorted(messages, key=lambda k: k['timestamp']) 
-            messages = messages[-messageNum:]
-            for message in messages:
-                name = message['user'] if 'user' in message.keys() else 'System'
-                timestamp = int(str(message['timestamp'])[0:10])
-                print('\n%s, %s:\n%s' % (name,
-                                        humanize.naturaltime(datetime.datetime.now() \
-                                         - datetime.datetime.fromtimestamp(timestamp)),
-                                        textwrap.fill(message['text'], width=80)))
-        if args['<args>'][0] == 'send':
-            party = int(args['<args>'][1])
-            if party > 0:
-                party = guilds[int(args['<args>'][1])-1]
-            elif party == 0:
-                party = user.get('party')['_id']
-            else:
-                print('Invalid ID - must be 0 for party or > 0. \
-                      Use \'habitica chat list\' to get a list of IDs.')
-                sys.exit(1)
+            printChatMessages(messages, messageNum)
 
+        elif args['<args>'][0] == 'send':
+            party = chatID(args['<args>'][1], user, guilds)
             chat = api.Habitica(auth=auth, resource="groups", aspect=party)
             send = chat(message=args['<args>'][2:], _method='post', _one='chat')
 
             messages = chat(_one='chat')
+            printChatMessages(messages, 5)
             chat(_method='post', _one='chat', _two='seen')
-            messages = sorted(messages, key=lambda k: k['timestamp']) 
-            messages = messages[-5:]
-            for message in messages:
-                name = message['user'] if 'user' in message.keys() else 'System'
-                timestamp = int(str(message['timestamp'])[0:10])
-                print('\n%s, %s:\n%s' % (name,
-                                        humanize.naturaltime(datetime.datetime.now() \
-                                         - datetime.datetime.fromtimestamp(timestamp)),
-                                        textwrap.fill(message['text'], width=80)))
 
 
     else:
