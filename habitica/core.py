@@ -1491,7 +1491,7 @@ def cli():
         print(title)
         print('=' * len(title))
         print(textwrap.fill(messages, width=80))
-        print('-' * max(len(messages), len(title)))
+        print('-' * min(max(len(messages), len(title)), 80))
         print('%s %s' % ('Health:'.rjust(len_ljust, ' '), health))
         print('%s %s' % ('XP:'.rjust(len_ljust, ' '), xp))
         print('%s %s' % ('Mana:'.rjust(len_ljust, ' '), mana))
