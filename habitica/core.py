@@ -1657,17 +1657,23 @@ def cli():
         print_task_list(todos)
 
     elif args['<command>'] == 'chat':           
+        # Interface to party and guild chats
         user = hbt.user()
         guilds = user.get('guilds')
-        
+
+        # List available chat IDs to use with show and send args
+        # party is always 0
         if args['<args>'][0] == 'list':
             print('0 %s' % hbt.groups.party()['name'])
+
+            # use cache if possible and younger than 1 week
             if 'timestamp' in cache['Guildnames'].keys() and \
              time() - float(cache['Guildnames']['timestamp']) < 604800:
                 for i in range(len(guilds)):
                     try:
                         name = cache.get(SECTION_CACHE_GUILDNAMES, guilds[i])
                     except configparser.NoOptionError:
+                        # name not yet cached
                         name = getattr(hbt.groups, guilds[i])()['name']
                         cache = update_guildnames_cache(CACHE_CONF,
                                                number=guilds[i],
@@ -1684,17 +1690,22 @@ def cli():
                                                number=guilds[i],
                                                name=name)
                     print('%d %s' % (i + 1, name))
-        
+
+        # Print chat messages
         elif args['<args>'][0] == 'show':
             messageNum = 5
+            # Trying to catch all possible issues with user input
             if len(args['<args>']) > 3 or len(args['<args>']) < 0: 
                 print('Invalid number of arguments! Must be group number '
                       '+ (optional) number of messages to show.')
                 sys.exit(1)
+            # no arguments supplied: assuming party chat
             elif len(args['<args>']) == 1:
-                party = user.get('party')['_id'] 
+                party = user.get('party')['_id']
+            # use and validate number as chatID
             elif len(args['<args>']) == 2:
                 party = chatID(args['<args>'][1], user, guilds)
+            # two numbers: validate both
             else:
                 try:
                     messageNum = int(args['<args>'][2])
@@ -1703,18 +1714,28 @@ def cli():
                     sys.exit(1)
                 party = chatID(args['<args>'][1], user, guilds)
 
+            # get messages and print them nicely, mark chat as seen
             chat = api.Habitica(auth=auth, resource="groups", aspect=party)
             messages = chat(_one='chat')
             chat(_method='post', _one='chat', _two='seen')
             printChatMessages(messages, messageNum)
 
+        # sending messages to chats defined by chatID
         elif args['<args>'][0] == 'send':
+            # we need at least the command, chatID and a message
+            if len(args['<args>']) < 3:
+                print('Not enough arguments!')
+                sys.exit(1)
+            # chatID validates input on its own
             party = chatID(args['<args>'][1], user, guilds)
             chat = api.Habitica(auth=auth, resource="groups", aspect=party)
+            # use everything else as message
             send = chat(message=args['<args>'][2:], _method='post', _one='chat')
 
+            # get and print messages after sending
             messages = chat(_one='chat')
             printChatMessages(messages, 5)
+            # mark chat as seen
             chat(_method='post', _one='chat', _two='seen')
 
 
