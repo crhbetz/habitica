@@ -655,6 +655,7 @@ def cli():
     todos                      List todo tasks
     todos done <task-id>       Mark one or more todo <task-id> completed
     todos add <task>           Add todo with description <task>
+    todos delete <task-id>     Delete one or more todo <task-id>
     server                     Show status of Habitica service
     home                       Open tasks page in default browser
     item                       Show list of item types
@@ -1592,8 +1593,8 @@ def cli():
         elif 'delete' in args['<args>']:
             tids = get_task_ids(args['<args>'][1:])
             for tid in tids:
-                hbt.user.tasks(_id=todos[tid]['id'],
-                               _method='delete')
+                todo = api.Habitica(auth=auth, resource="tasks", aspect=todos[tid]['id'])
+                todo(_method='delete')
                 print('deleted todo \'%s\''
                       % todos[tid]['text'])
                 sleep(HABITICA_REQUEST_WAIT_TIME)
