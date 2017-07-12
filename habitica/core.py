@@ -1587,7 +1587,7 @@ def cli():
                            text=ttext,
                            priority=PRIORITY[args['--difficulty']],
                            _method='post')
-            todos.insert(0, {'completed': False, 'text': ttext})
+            todos.insert(0, {'completed': False, 'text': ttext, 'type': 'todo'})
             print('added new todo \'%s\'' % ttext)
         elif 'delete' in args['<args>']:
             tids = get_task_ids(args['<args>'][1:])
