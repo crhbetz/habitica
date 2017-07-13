@@ -1660,16 +1660,19 @@ def cli():
         # Interface to party and guild chats
         user = hbt.user()
         guilds = user.get('guilds')
+        groups = hbt.groups.party()
 
         # List available chat IDs to use with show and send args
         # party is always 0
         if args['<args>'][0] == 'list':
-            print('0 %s' % hbt.groups.party()['name'])
+            alert = '(!)' if groups['id'] in user['newMessages'].keys() else ''
+            print('0 %s %s' % (groups['name'], alert))
 
             # use cache if possible and younger than 1 week
             if 'timestamp' in cache['Guildnames'].keys() and \
              time() - float(cache['Guildnames']['timestamp']) < 604800:
                 for i in range(len(guilds)):
+                    alert = '(!)' if guilds[i] in user['newMessages'].keys() else ''
                     try:
                         name = cache.get(SECTION_CACHE_GUILDNAMES, guilds[i])
                     except configparser.NoOptionError:
@@ -1678,7 +1681,7 @@ def cli():
                         cache = update_guildnames_cache(CACHE_CONF,
                                                number=guilds[i],
                                                name=name)
-                    print('%d %s' % (i + 1, name))
+                    print('%d %s %s' % (i + 1, name, alert))
 
             else:
                 cache = update_guildnames_cache(CACHE_CONF,
@@ -1689,7 +1692,7 @@ def cli():
                     cache = update_guildnames_cache(CACHE_CONF,
                                                number=guilds[i],
                                                name=name)
-                    print('%d %s' % (i + 1, name))
+                    print('%d %s %s' % (i + 1, name, alert))
 
         # Print chat messages
         elif args['<args>'][0] == 'show':
