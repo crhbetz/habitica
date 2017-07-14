@@ -274,10 +274,12 @@ def cl_item_count(task):
 
 
 def print_task_list(tasks, needsCron = False):
+    # find longest task name to arrange additional info
     longesttext = 0
     for task in tasks:
         if len(task['text']) > longesttext:
             longesttext = len(task['text'])
+
     for i, task in enumerate(tasks):
         if task['completed']:
             completed = 'x'
@@ -293,30 +295,41 @@ def print_task_list(tasks, needsCron = False):
                                          streak,
                                          task['text'])
         checklist_available = cl_item_count(task) > 0
+        # count completed checklist items if applicable
         if checklist_available:
             rjust_todo = len(task_line) - len(task['text'])
             task_line += ' (%s/%s)' % (str(cl_done_count(task)),
                                        str(cl_item_count(task)))
+        # todos can have a due date - display it human readable
         if task['type'] == "todo" and 'date' in task.keys() and task['date'] != "":
             task_line = task_line.ljust(longesttext + 9)
-            task_line += 'due %s (%s)' % (humanize.naturaltime(datetime.datetime.now(pytz.utc) - \
-                                                datetime.timedelta(days=1) - \
-                                                dateutil.parser.parse(task['date'])\
-                                                .astimezone(dateutil.tz.tzlocal())),
-                                            humanize.naturaldate(dateutil.parser.parse(task['date'])\
-                                                .astimezone(dateutil.tz.tzlocal())))
+            task_line += 'due %s (%s)' \
+                         % (humanize.naturaltime(datetime.datetime.now(pytz.utc) - \
+                            datetime.timedelta(days=1) - \
+                            dateutil.parser.parse(task['date'])\
+                            .astimezone(dateutil.tz.tzlocal())),
+                            humanize.naturaldate(dateutil.parser.parse(task['date'])\
+                            .astimezone(dateutil.tz.tzlocal())))
+
+        # are we recording yesterday's activity?
         if not needsCron:
             print(task_line)
+        # yesterday's activity is only relevant for dailies
         elif not task['type'] == "daily":
             print(task_line)
+        # only show dailies that are due, not completed and chosen as 'yesterdaily'
         elif task['yesterDaily'] and not task['completed'] and task['isDue']:
             print(task_line)
         else:
+        # if we didn't print a task line, we can move to the next item
             continue
+
+        # print checklist if desired and available
         if checklists_on and checklist_available:
             for c, check in enumerate(task['checklist']):
                 completed = 'x' if check['completed'] else '_'
                 print('%s%s [%s] %s' % ('\t'.rjust(rjust_todo),
+                                     # https://stackoverflow.com/questions/23199733
                                      chr(ord('a') - 1 + c + 1),
                                      completed,
                                      check['text']))
@@ -1554,6 +1567,7 @@ def cli():
             user = hbt.user()
             show_delta(hbt, before_user, user)
 
+        # avoid additional API call if possible
         try:
             user
         except NameError:
@@ -1679,6 +1693,8 @@ def cli():
             chat = api.Habitica(auth=auth, resource="groups", aspect=party)
             send = chat(message=args['<args>'][2:], _method='post', _one='chat')
 
+    # moving to the next day
+    # needed to fully implement 'recording yesterday's activity'
     elif args['<command>'] == 'newday':
         user = hbt.user()
         if user['needsCron']:
