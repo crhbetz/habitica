@@ -767,6 +767,7 @@ def cli():
     arise                      Check out of the inn
     quest                      Report quest details
     quest accept               Accept a quest proposal
+    quest forcestart           Quest/Group-Leader only: start quest immediately
     chat list                  List available chats and their ID
     chat show [<id>] [<num>]   Shows last <num> messages from chat <id>
                                (defaults: ID 0, num 5)
@@ -1284,6 +1285,30 @@ def cli():
             print('%s %s' % ('Quest:'.rjust(len_ljust, ' '), quest))
             print_gus(groupUserStatus, len_ljust)
 
+            if 'forcestart' in args['<args>']:
+                if quest_data['active']:
+                    print('Can\'t force-start: Quest is already active.')
+                else:
+                    response = input('\nDo you really want to start the quest now?'
+                           '\nOnly members who accepted the invitation will take part! (y/N)\n')
+                    if response.capitalize() != 'Y':
+                        print('Aborting force start.')
+                    else:
+                        party = api.Habitica(auth=auth, resource='groups', aspect='party')
+                        quest_data = party(_method='post', _one='quests', _two='force-start')
+                        if quest_data == None:
+                            print('Could not force-start the quest!')
+
+            if 'accept' in args['<args>']:
+                if quest_data['active']:
+                    print('Can\'t accept: Quest is already active.')
+                else:
+                    party = api.Habitica(auth=auth, resource='groups', aspect='party')
+                    quest_data = party(_method='post', _one='quests', _two='accept')
+                    if quest_data == None:
+                        print('Error accepting the quest! (already accepted?)')
+                    else:
+                        print('Accepted quest invitation!')
 
     # Select a pet or mount (v3 ok)
     elif args['<command>'] == 'ride' or args['<command>'] == 'walk':
