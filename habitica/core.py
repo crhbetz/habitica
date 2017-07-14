@@ -56,6 +56,7 @@ SETTINGS_CONF = os.path.expanduser('~') + '/.config/habitica/settings.cfg'
 
 SECTION_HABITICA = 'Habitica'
 SECTION_CACHE_QUEST = 'Quest'
+SECTION_CACHE_GUILDNAMES = 'Guildnames'
 checklists_on = False
 
 DEFAULT_PARTY = 'Not currently in a party'
@@ -161,6 +162,9 @@ def load_cache(configfile):
     if not cache.has_section(SECTION_CACHE_QUEST):
         cache.add_section(SECTION_CACHE_QUEST)
 
+    if not cache.has_section(SECTION_CACHE_GUILDNAMES):
+        cache.add_section(SECTION_CACHE_GUILDNAMES)
+
     return cache
 
 
@@ -178,6 +182,21 @@ def update_quest_cache(configfile, **kwargs):
     cache.read(configfile)
 
     return cache
+
+def update_guildnames_cache(configfile, number, name):
+    logging.debug('Updating (and caching) config data (%s)...' % configfile)
+
+    cache = load_cache(configfile)
+
+    cache.set(SECTION_CACHE_GUILDNAMES, number, name)
+
+    with open(configfile, 'w') as f:
+        cache.write(f)
+
+    cache.read(configfile)
+
+    return cache
+
 
 
 def get_task_ids(tids):
@@ -660,6 +679,41 @@ def get_quest_info(hbt, quest_key):
                                quest_type=str(qt),
                                quest_max=str(quest_max),
                                quest_title=str(quest_title))
+
+def chatID(party, user, guilds):
+    message = ('Invalid ID - must be 0 for party or > 0.\n'
+              'Use \'habitica chat list\' to get a list of IDs.')
+    try:
+        party = int(party)
+    except ValueError:
+        print(message)
+        sys.exit(1)
+
+    if party > 0:
+         try:
+             party = guilds[int(party)-1]
+             return party
+         except IndexError:
+             print('ID too high - you\'re not a member '
+                   'in this many guilds.')
+             sys.exit(1)
+    elif party == 0:
+         party = user.get('party')['_id']
+         return party
+    else:
+        print(message)
+        sys.exit(1)
+
+def printChatMessages(messages, messageNum):
+    messages = sorted(messages, key=lambda k: k['timestamp']) 
+    messages = messages[-messageNum:]
+    for message in messages:
+        name = message['user'] if 'user' in message.keys() else 'System'
+        timestamp = int(str(message['timestamp'])[0:10])
+        print('\n%s, %s:\n%s' % (name,
+                                humanize.naturaltime(datetime.datetime.now() \
+                                - datetime.datetime.fromtimestamp(timestamp)),
+                                textwrap.fill(message['text'], width=80)))
 
 
 def cli():
@@ -1305,6 +1359,7 @@ def cli():
 
         # gather status info
         user = hbt.user()
+        guilds = user.get('guilds')
         party = hbt.groups.party()
         stats = user.get('stats', '')
         group = hbt.groups(type='party')
@@ -1404,15 +1459,18 @@ def cli():
         messages = 'No new messages.'
         if newMessages:
             messages = 'New messages in '
-            for message in newMessages.values():
-                messages = messages + message['name'] + ', '
+            for gid, message in newMessages.items():
+                if gid != party['id']:
+                    messages = messages + message['name'] + '(' + str(guilds.index(gid)+1) + '), '
+                else:
+                    messages = messages + message['name'] + '(0), '
             messages = messages[:-2] + '!'
 
         print('=' * len(title))
         print(title)
         print('=' * len(title))
-        print(messages)
-        print('-' * max(len(messages), len(title)))
+        print(textwrap.fill(messages, width=80))
+        print('-' * min(max(len(messages), len(title)), 80))
         print('%s %s' % ('Health:'.rjust(len_ljust, ' '), health))
         print('%s %s' % ('XP:'.rjust(len_ljust, ' '), xp))
         print('%s %s' % ('Mana:'.rjust(len_ljust, ' '), mana))
@@ -1578,60 +1636,89 @@ def cli():
         print_task_list(todos)
 
     elif args['<command>'] == 'chat':           
+        # Interface to party and guild chats
         user = hbt.user()
         guilds = user.get('guilds')
-        
-        if args['<args>'][0] == 'list':
-            print('0 %s' % hbt.groups.party()['name'])
-            for i in range(len(guilds)):
-                print('%d %s' % (i + 1,
-                                 getattr(hbt.groups, guilds[i])()['name']))
-        
-        if args['<args>'][0] == 'show':
-            if len(args['<args>']) > 3 or len(args['<args>']) < 0:
-                print('Invalid number of arguments! Must be group number \
-                      + (optional) number of messages to show.')
-                sys.exit(1)
-            elif len(args['<args>']) == 1:
-                party = user.get('party')['_id'] 
-                messageNum = 5
-            elif len(args['<args>']) == 2:
-                messageNum = 5
-                if args['<args>'][1] == '0':
-                    party = user.get('party')['_id']
-                else:
-                    party = guilds[int(args['<args>'][1])-1]
-            else:
-                messageNum = int(args['<args>'][2])
-                if args['<args>'][1] == '0':
-                    party = user.get('party')['_id']
-                else:
-                    party = guilds[int(args['<args>'][1])-1]
+        groups = hbt.groups.party()
 
+        # List available chat IDs to use with show and send args
+        # party is always 0
+        if args['<args>'][0] == 'list':
+            alert = '(!)' if groups['id'] in user['newMessages'].keys() else ''
+            print('0 %s %s' % (groups['name'], alert))
+
+            # use cache if possible and younger than 1 week
+            if 'timestamp' in cache['Guildnames'].keys() and \
+             time() - float(cache['Guildnames']['timestamp']) < 604800:
+                for i in range(len(guilds)):
+                    alert = '(!)' if guilds[i] in user['newMessages'].keys() else ''
+                    try:
+                        name = cache.get(SECTION_CACHE_GUILDNAMES, guilds[i])
+                    except configparser.NoOptionError:
+                        # name not yet cached
+                        name = getattr(hbt.groups, guilds[i])()['name']
+                        cache = update_guildnames_cache(CACHE_CONF,
+                                               number=guilds[i],
+                                               name=name)
+                    print('%d %s %s' % (i + 1, name, alert))
+
+            else:
+                cache = update_guildnames_cache(CACHE_CONF,
+                                          number='timestamp',
+                                          name=str(time()))
+                for i in range(len(guilds)):
+                    name = getattr(hbt.groups, guilds[i])()['name']
+                    cache = update_guildnames_cache(CACHE_CONF,
+                                               number=guilds[i],
+                                               name=name)
+                    print('%d %s %s' % (i + 1, name, alert))
+
+        # Print chat messages
+        elif args['<args>'][0] == 'show':
+            messageNum = 5
+            # Trying to catch all possible issues with user input
+            if len(args['<args>']) > 3 or len(args['<args>']) < 0: 
+                print('Invalid number of arguments! Must be group number '
+                      '+ (optional) number of messages to show.')
+                sys.exit(1)
+            # no arguments supplied: assuming party chat
+            elif len(args['<args>']) == 1:
+                party = user.get('party')['_id']
+            # use and validate number as chatID
+            elif len(args['<args>']) == 2:
+                party = chatID(args['<args>'][1], user, guilds)
+            # two numbers: validate both
+            else:
+                try:
+                    messageNum = int(args['<args>'][2])
+                except ValueError:
+                    print('Number of messages must be a number!')
+                    sys.exit(1)
+                party = chatID(args['<args>'][1], user, guilds)
+
+            # get messages and print them nicely, mark chat as seen
             chat = api.Habitica(auth=auth, resource="groups", aspect=party)
             messages = chat(_one='chat')
-            messages = sorted(messages, key=lambda k: k['timestamp']) 
-            messages = messages[-messageNum:]
-            for message in messages:
-                name = message['user'] if 'user' in message.keys() else 'System'
-                timestamp = int(str(message['timestamp'])[0:10])
-                print('\n%s, %s:\n%s' % (name,
-                                        humanize.naturaltime(datetime.datetime.now() \
-                                         - datetime.datetime.fromtimestamp(timestamp)),
-                                        textwrap.fill(message['text'], width=80)))
-        if args['<args>'][0] == 'send':
-            party = int(args['<args>'][1])
-            if party > 0:
-                party = guilds[int(args['<args>'][1])-1]
-            elif party == 0:
-                party = user.get('party')['_id']
-            else:
-                print('Invalid ID - must be 0 for party or > 0. \
-                      Use \'habitica chat list\' to get a list of IDs.')
-                sys.exit(1)
+            chat(_method='post', _one='chat', _two='seen')
+            printChatMessages(messages, messageNum)
 
+        # sending messages to chats defined by chatID
+        elif args['<args>'][0] == 'send':
+            # we need at least the command, chatID and a message
+            if len(args['<args>']) < 3:
+                print('Not enough arguments!')
+                sys.exit(1)
+            # chatID validates input on its own
+            party = chatID(args['<args>'][1], user, guilds)
             chat = api.Habitica(auth=auth, resource="groups", aspect=party)
+            # use everything else as message
             send = chat(message=args['<args>'][2:], _method='post', _one='chat')
+
+            # get and print messages after sending
+            messages = chat(_one='chat')
+            printChatMessages(messages, 5)
+            # mark chat as seen
+            chat(_method='post', _one='chat', _two='seen')
 
 
     else:
