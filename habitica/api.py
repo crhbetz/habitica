@@ -78,7 +78,7 @@ class Habitica(object):
         # actually make the request of the API
         if method in ['put', 'post'] and self.aspect \
                 not in ['class', 'inventory']:
-            if 'batch-update' in self.aspect:
+            if not self.aspect == None and 'batch-update' in self.aspect:
                 data = json.dumps(kwargs.pop('ops', []))
             else:
                 data = json.dumps(kwargs)

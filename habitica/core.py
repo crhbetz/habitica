@@ -292,11 +292,13 @@ def cl_item_count(task):
         return 0
 
 
-def print_task_list(tasks):
+def print_task_list(tasks, needsCron = False):
+    # find longest task name to arrange additional info
     longesttext = 0
     for task in tasks:
         if len(task['text']) > longesttext:
             longesttext = len(task['text'])
+
     for i, task in enumerate(tasks):
         if task['completed']:
             completed = 'x'
@@ -312,23 +314,41 @@ def print_task_list(tasks):
                                          streak,
                                          task['text'])
         checklist_available = cl_item_count(task) > 0
+        # count completed checklist items if applicable
         if checklist_available:
             rjust_todo = len(task_line) - len(task['text'])
             task_line += ' (%s/%s)' % (str(cl_done_count(task)),
                                        str(cl_item_count(task)))
+        # todos can have a due date - display it human readable
         if task['type'] == "todo" and 'date' in task.keys() and task['date'] != "":
             task_line = task_line.ljust(longesttext + 9)
-            task_line += 'due %s (%s)' % (humanize.naturaltime(datetime.datetime.now(pytz.utc) - \
-                                                datetime.timedelta(days=1) - \
-                                                dateutil.parser.parse(task['date'])\
-                                                .astimezone(dateutil.tz.tzlocal())),
-                                            humanize.naturaldate(dateutil.parser.parse(task['date'])\
-                                                .astimezone(dateutil.tz.tzlocal())))
-        print(task_line)
+            task_line += 'due %s (%s)' \
+                         % (humanize.naturaltime(datetime.datetime.now(pytz.utc) - \
+                            datetime.timedelta(days=1) - \
+                            dateutil.parser.parse(task['date'])\
+                            .astimezone(dateutil.tz.tzlocal())),
+                            humanize.naturaldate(dateutil.parser.parse(task['date'])\
+                            .astimezone(dateutil.tz.tzlocal())))
+
+        # are we recording yesterday's activity?
+        if not needsCron:
+            print(task_line)
+        # yesterday's activity is only relevant for dailies
+        elif not task['type'] == "daily":
+            print(task_line)
+        # only show dailies that are due, not completed and chosen as 'yesterdaily'
+        elif task['yesterDaily'] and not task['completed'] and task['isDue']:
+            print(task_line)
+        else:
+        # if we didn't print a task line, we can move to the next item
+            continue
+
+        # print checklist if desired and available
         if checklists_on and checklist_available:
             for c, check in enumerate(task['checklist']):
                 completed = 'x' if check['completed'] else '_'
                 print('%s%s [%s] %s' % ('\t'.rjust(rjust_todo),
+                                     # https://stackoverflow.com/questions/23199733
                                      chr(ord('a') - 1 + c + 1),
                                      completed,
                                      check['text']))
@@ -738,6 +758,7 @@ def cli():
     dailies                    List daily tasks
     dailies done               Mark daily <task-id> complete
     dailies undo               Mark daily <task-id> incomplete
+    newday                     Finish recording yesterday's activity
     todos                      List todo tasks
     todos done <task-id>       Mark one or more todo <task-id> completed
     todos add <task>           Add todo with description <task>
@@ -1392,6 +1413,7 @@ def cli():
         sleeping = user['preferences']['sleep']
         food_count = sum(items['food'].values())
         newMessages = user.get('newMessages', '')
+        yesterdayMessage = 'Beware! You are currently recording yesterday\'s activity! Please use the dailies command!'
         # gather quest progress information (yes, janky. the API
         # doesn't make this stat particularly easy to grab...).
         # because hitting /content downloads a crapload of stuff, we
@@ -1464,20 +1486,20 @@ def cli():
         groupUserStatus = {}
         groupUserStatus['users'] = {}
         for member in members:
-            user = member['profile']['name']
-            groupUserStatus['users'][user] = {}
+            name = member['profile']['name']
+            groupUserStatus['users'][name] = {}
             groupUserStatus.setdefault('longestname', 1)
             if len(member['profile']['name']) > groupUserStatus['longestname']:
                     groupUserStatus['longestname'] = len(member['profile']['name'])
-            groupUserStatus['users'][user]['name'] = member['profile']['name']
+            groupUserStatus['users'][name]['name'] = member['profile']['name']
             if member['preferences']['sleep']:
-                    groupUserStatus['users'][user]['sleep'] = 'sleeping'
+                    groupUserStatus['users'][name]['sleep'] = 'sleeping'
             else:
-                    groupUserStatus['users'][user]['sleep'] = 'active'
-            groupUserStatus['users'][user]['lastactive'] = member['auth']['timestamps']['loggedin']
+                    groupUserStatus['users'][name]['sleep'] = 'active'
+            groupUserStatus['users'][name]['lastactive'] = member['auth']['timestamps']['loggedin']
             stats = ['hp', 'maxHealth', 'mp', 'maxMP', 'class']
             for stat in stats:
-                groupUserStatus['users'][user][stat] = member['stats'][stat]
+                groupUserStatus['users'][name][stat] = member['stats'][stat]
             
         groupUserStatus['users'] = OrderedDict(sorted(groupUserStatus['users'].items(), key=lambda t: t[1]['lastactive']))
 
@@ -1496,6 +1518,9 @@ def cli():
         print('=' * len(title))
         print(textwrap.fill(messages, width=80))
         print('-' * min(max(len(messages), len(title)), 80))
+        if user['needsCron']:
+            print(yesterdayMessage)
+            print('-' * max(len(yesterdayMessage), len(messages)))
         print('%s %s' % ('Health:'.rjust(len_ljust, ' '), health))
         print('%s %s' % ('XP:'.rjust(len_ljust, ' '), xp))
         print('%s %s' % ('Mana:'.rjust(len_ljust, ' '), mana))
@@ -1601,9 +1626,23 @@ def cli():
                         _two=dailies[checklistItem[0]]['checklist'][checklistItem[1]]['id'] + '/score')
                     dailies[checklistItem[0]]['checklist'][checklistItem[1]]['completed'] = \
                         not dailies[checklistItem[0]]['checklist'][checklistItem[1]]['completed']
-            show_delta(hbt, before_user, hbt.user())
+            user = hbt.user()
+            show_delta(hbt, before_user, user)
 
-        print_task_list(dailies)
+        # avoid additional API call if possible
+        try:
+            user
+        except NameError:
+            user = hbt.user()
+
+        if user['needsCron']:
+            yesterdayMessage = ('You left these Dailies unchecked yesterday! '
+                                'Do you want to check off any of them now? When you\'re done, start a new '
+                                'day using \'habitica newday\'!')
+            print('-' * min(len(yesterdayMessage), 80))
+            print(textwrap.fill(yesterdayMessage, width=80))
+            print('-' * min(len(yesterdayMessage), 80))
+        print_task_list(dailies, needsCron=user['needsCron'])
 
     # handle todo items (v3 ok)
     elif args['<command>'] == 'todos':
@@ -1744,6 +1783,17 @@ def cli():
             printChatMessages(messages, 5)
             # mark chat as seen
             chat(_method='post', _one='chat', _two='seen')
+
+    # moving to the next day
+    # needed to fully implement 'recording yesterday's activity'
+    elif args['<command>'] == 'newday':
+        user = hbt.user()
+        if user['needsCron']:
+            print('Moving to the current day ...')
+            newday = hbt.cron(data="none", _method="post")
+            show_delta(hbt, user, hbt.user())
+        else:
+            print('We\'re already working the current day. Doing nothing!')
 
 
     else:
