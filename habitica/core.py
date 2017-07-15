@@ -272,7 +272,7 @@ def find_pet_to_feed(pets, items, suffix, finicky):
 
 def updated_task_list(tasks, tids):
     for tid in sorted(tids, reverse=True):
-        del(tasks[tid])
+        del(tasks[int(tid)-1])
     return tasks
 
 
@@ -1655,6 +1655,7 @@ def cli():
             for tid in tids:
                 checklistItem = isChecklistItem(tid)
                 if checklistItem == False:
+                    tid = int(tid) - 1
                     todo = api.Habitica(auth=auth, resource="tasks", aspect=todos[tid]['id'])
                     todo(_method='post', _one='score', _two='up')
                     print('marked todo \'%s\' complete'
