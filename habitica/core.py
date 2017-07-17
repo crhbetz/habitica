@@ -539,6 +539,8 @@ def do_item_enumerate(user, requested, ordered=False, pretty=True):
 
 def get_members(auth, party):
     result = []
+    if not party:
+        return result
     group = api.Habitica(auth=auth, resource="groups", aspect=party['id'])
     members = group(_one='members')
     for i in members:
@@ -601,7 +603,7 @@ def isChecklistItem(tid):
     if re.search(r'^[0-9]+[a-z]$', tid) != None:
         number = ord(re.search(r'[a-z]', tid).group(0)) - 97 #for char in re.findall(r'[a-z]{1}', tid)
         ttid = int(re.match(r'[0-9]+', tid).group(0)) - 1
-        logging.debug('found checklist item, number %s of task %s' 
+        logging.debug('found checklist item, number %s of task %s'
                       % (number, ttid))
         return ttid, number
     elif re.search(r'^[0-9]+$', tid) != None:
@@ -636,7 +638,7 @@ def group_user_status(quest_data, auth, hbt):
         stats = ['hp', 'maxHealth', 'mp', 'maxMP', 'class']
         for stat in stats:
             groupUserStatus['users'][user][stat] = member['stats'][stat]
-        
+
     groupUserStatus['users'] = OrderedDict(sorted(groupUserStatus['users'].items(), key=lambda t: t[1]['lastactive']))
     return groupUserStatus
 
@@ -659,7 +661,7 @@ def print_gus(groupUserStatus, len_ljust):
     for user in groupUserStatus['users'].values():
         userLine = ' '.rjust(len_ljust, ' ')
         userLine += user['name'].ljust(groupUserStatus['longestname'] + 1)
-        userLine += user['class'].capitalize().ljust(9, ' ') 
+        userLine += user['class'].capitalize().ljust(9, ' ')
         if not groupUserStatus['queststatus']:
             userLine += user['decision'].ljust(10, ' ')
         userLine += user['sleep'].ljust(9, ' ')
@@ -718,14 +720,19 @@ def chatID(party, user, guilds):
                    'in this many guilds.')
              sys.exit(1)
     elif party == 0:
-         party = user.get('party')['_id']
-         return party
+        if '_id' in user.get('party'):
+            party = user.get('party')['_id']
+            return party
+        else:
+            print('Chat index 0 is reserved for the party,'
+                  ' but you\'re not currently in a party.')
+            sys.exit(1)
     else:
         print(message)
         sys.exit(1)
 
 def printChatMessages(messages, messageNum):
-    messages = sorted(messages, key=lambda k: k['timestamp']) 
+    messages = sorted(messages, key=lambda k: k['timestamp'])
     messages = messages[-messageNum:]
     for message in messages:
         name = message['user'] if 'user' in message.keys() else 'System'
@@ -792,7 +799,7 @@ def cli():
     chat list                  List available chats and their ID
     chat show [<id>] [<num>]   Shows last <num> messages from chat <id>
                                (defaults: ID 0, num 5)
-    chat send <id> "<Message>" Sends Message to chat ID 
+    chat send <id> "<Message>" Sends Message to chat ID
 
   For `habits up|down`, `dailies done|undo`, and `todos done`, you can pass
   one or more <task-id> parameters, using either comma-separated lists or
@@ -1140,7 +1147,7 @@ def cli():
             report['user'] = user
         if 'party' in wanted:
             report['party'] = party
-        if 'members' in wanted:
+        if party and 'members' in wanted:
             group = api.Habitica(auth=auth, resource="groups", aspect=party['id'])
             report['members'] = group(_one='members')
         if 'food' in wanted:
@@ -1267,6 +1274,9 @@ def cli():
         # if on a quest with the party, grab quest info
         user = hbt.user()
         group = hbt.groups(type='party')
+        if not group:
+            print('You are not in any party. No quests available.')
+            return
         party_id = group[0]['id']
         quest_data = getattr(hbt.groups, party_id)()['quest']
         if quest_data:
@@ -1294,7 +1304,7 @@ def cli():
                         str(int(quest_progress)),
                         cache.get(SECTION_CACHE_QUEST, 'quest_max'),
                         str(int(user['party']['quest']['progress']['up'])))
-                            
+
             else:
                 quest = '%s "%s"' % (
                             'Preparing',
@@ -1420,13 +1430,13 @@ def cli():
         # cache info about the current quest in cache.
         quest = 'Not currently on a quest'
         if (party is not None and
-                party.get('quest', '')): 
+                party.get('quest', '')):
 
             quest_key = party['quest']['key']
 
             if cache.get(SECTION_CACHE_QUEST, 'quest_key') != quest_key:
                 get_quest_info(hbt, quest_key)
- 
+
             # now we use /party and quest_type to figure out our progress!
             quest_type = cache.get(SECTION_CACHE_QUEST, 'quest_type')
             if quest_type == 'collect' and party['quest']['active']:
@@ -1446,7 +1456,7 @@ def cli():
                             str(int(quest_progress)),
                             cache.get(SECTION_CACHE_QUEST, 'quest_max'),
                             str(int(user['party']['quest']['progress']['up'])))
-                            
+
             else:
                 quest = '%s "%s"' % (
                             'Preparing',
@@ -1500,14 +1510,14 @@ def cli():
             stats = ['hp', 'maxHealth', 'mp', 'maxMP', 'class']
             for stat in stats:
                 groupUserStatus['users'][name][stat] = member['stats'][stat]
-            
+
         groupUserStatus['users'] = OrderedDict(sorted(groupUserStatus['users'].items(), key=lambda t: t[1]['lastactive']))
 
         messages = 'No new messages.'
         if newMessages:
             messages = 'New messages in '
             for gid, message in newMessages.items():
-                if gid != party['id']:
+                if not party or gid != party['id']:
                     messages = messages + message['name'] + '(' + str(guilds.index(gid)+1) + '), '
                 else:
                     messages = messages + message['name'] + '(0), '
@@ -1529,7 +1539,10 @@ def cli():
         print('%s %s' % ('Pet:'.rjust(len_ljust, ' '), nice_name(pet)))
         print('%s %s' % ('Mount:'.rjust(len_ljust, ' '), nice_name(mount)))
         print('%s %s' % ('Quest:'.rjust(len_ljust, ' '), quest))
-        print('%s %s' % ('Group:'.rjust(len_ljust, ' '), group[0]['name']))
+        print('%s %s' % ('Group:'.rjust(len_ljust, ' '), group[0]['name'] if group else 'Not currently in groups'))
+
+        if not group:
+            return
 
         len_ljust += 1
         headLine = ''.rjust(len_ljust, ' ')
@@ -1546,13 +1559,12 @@ def cli():
         for user in groupUserStatus['users'].values():
             userLine = ' '.rjust(len_ljust, ' ')
             userLine += user['name'].ljust(groupUserStatus['longestname'] + 1)
-            userLine += user['class'].capitalize().ljust(9, ' ') 
+            userLine += user['class'].capitalize().ljust(9, ' ')
             userLine += user['sleep'].ljust(10, ' ')
             userLine += humanize.naturaltime(datetime.datetime.now(pytz.utc) - dateutil.parser.parse(user['lastactive'])).ljust(15, ' ')
             userLine += (str(int(user['hp'])) + '/' + str(user['maxHealth'])).ljust(8, ' ')
             userLine += (str(int(user['mp'])) + '/' + str(user['maxMP'])).ljust(8, ' ')
             print(userLine)
-
 
 
     # GET/POST habits (v3 ok)
@@ -1600,7 +1612,7 @@ def cli():
         if direction != None:
             before_user = hbt.user()
 #            tids = get_task_ids(args['<args>'][1:])
-            tids = args['<args>'][1:]  
+            tids = args['<args>'][1:]
             for tid in tids:
                 checklistItem = isChecklistItem(tid)
                 if checklistItem == False:
@@ -1617,7 +1629,7 @@ def cli():
                 elif checklistItem == None:
                     print('Could not parse argument \'%s\' - ignoring it!' % tid)
                 else:
-                    checklist = api.Habitica(auth=auth, resource="tasks", 
+                    checklist = api.Habitica(auth=auth, resource="tasks",
                                              aspect=dailies[checklistItem[0]]['id'])
                     print('toggled checklist item \'%s\' of daily \'%s\''
                           % (dailies[checklistItem[0]]['checklist'][checklistItem[1]]['text'],
@@ -1700,7 +1712,7 @@ def cli():
             todos = updated_task_list(todos, tids)
         print_task_list(todos)
 
-    elif args['<command>'] == 'chat':           
+    elif args['<command>'] == 'chat':
         # Interface to party and guild chats
         user = hbt.user()
         guilds = user.get('guilds')
@@ -1709,12 +1721,15 @@ def cli():
         # List available chat IDs to use with show and send args
         # party is always 0
         if args['<args>'][0] == 'list':
-            alert = '(!)' if groups['id'] in user['newMessages'].keys() else ''
-            print('0 %s %s' % (groups['name'], alert))
+            alert = ''
+            if groups and groups['id'] in user['newMessages'].keys():
+                alert = '(!)'
+                print('0 %s %s' % (groups['name'], alert))
 
             # use cache if possible and younger than 1 week
             if 'timestamp' in cache['Guildnames'].keys() and \
              time() - float(cache['Guildnames']['timestamp']) < 604800:
+
                 for i in range(len(guilds)):
                     alert = '(!)' if guilds[i] in user['newMessages'].keys() else ''
                     try:
@@ -1732,6 +1747,7 @@ def cli():
                                           number='timestamp',
                                           name=str(time()))
                 for i in range(len(guilds)):
+                    alert = '(!)' if guilds[i] in user['newMessages'].keys() else ''
                     name = getattr(hbt.groups, guilds[i])()['name']
                     cache = update_guildnames_cache(CACHE_CONF,
                                                number=guilds[i],
@@ -1742,13 +1758,19 @@ def cli():
         elif args['<args>'][0] == 'show':
             messageNum = 5
             # Trying to catch all possible issues with user input
-            if len(args['<args>']) > 3 or len(args['<args>']) < 0: 
+            if len(args['<args>']) > 3 or len(args['<args>']) < 0:
                 print('Invalid number of arguments! Must be group number '
                       '+ (optional) number of messages to show.')
                 sys.exit(1)
             # no arguments supplied: assuming party chat
             elif len(args['<args>']) == 1:
-                party = user.get('party')['_id']
+                if '_id' in user.get('party'):
+                    party = user.get('party')['_id']
+                else:
+                    print('`chat show` without arguments assumes party chat,'
+                          ' but you\'re not currently in a party.')
+                    print('Please provide guild chat number.')
+                    sys.exit(1)
             # use and validate number as chatID
             elif len(args['<args>']) == 2:
                 party = chatID(args['<args>'][1], user, guilds)
