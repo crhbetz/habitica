@@ -720,8 +720,13 @@ def chatID(party, user, guilds):
                    'in this many guilds.')
              sys.exit(1)
     elif party == 0:
-         party = user.get('party')['_id']
-         return party
+        if '_id' in user.get('party'):
+            party = user.get('party')['_id']
+            return party
+        else:
+            print('Chat index 0 is reserved for the party,'
+                  ' but you\'re not currently in a party.')
+            sys.exit(1)
     else:
         print(message)
         sys.exit(1)
@@ -1715,12 +1720,15 @@ def cli():
         # List available chat IDs to use with show and send args
         # party is always 0
         if args['<args>'][0] == 'list':
-            alert = '(!)' if groups['id'] in user['newMessages'].keys() else ''
-            print('0 %s %s' % (groups['name'], alert))
+            alert = ''
+            if groups and groups['id'] in user['newMessages'].keys():
+                alert = '(!)'
+                print('0 %s %s' % (groups['name'], alert))
 
             # use cache if possible and younger than 1 week
             if 'timestamp' in cache['Guildnames'].keys() and \
              time() - float(cache['Guildnames']['timestamp']) < 604800:
+
                 for i in range(len(guilds)):
                     alert = '(!)' if guilds[i] in user['newMessages'].keys() else ''
                     try:
@@ -1738,6 +1746,7 @@ def cli():
                                           number='timestamp',
                                           name=str(time()))
                 for i in range(len(guilds)):
+                    alert = '(!)' if guilds[i] in user['newMessages'].keys() else ''
                     name = getattr(hbt.groups, guilds[i])()['name']
                     cache = update_guildnames_cache(CACHE_CONF,
                                                number=guilds[i],
@@ -1754,7 +1763,13 @@ def cli():
                 sys.exit(1)
             # no arguments supplied: assuming party chat
             elif len(args['<args>']) == 1:
-                party = user.get('party')['_id']
+                if '_id' in user.get('party'):
+                    party = user.get('party')['_id']
+                else:
+                    print('`chat show` without arguments assumes party chat,'
+                          ' but you\'re not currently in a party.')
+                    print('Please provide guild chat number.')
+                    sys.exit(1)
             # use and validate number as chatID
             elif len(args['<args>']) == 2:
                 party = chatID(args['<args>'][1], user, guilds)
