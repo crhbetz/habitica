@@ -78,6 +78,8 @@ def load_settings(configfile):
     integers = {'sell-max': "-1",
                 'sell-reserved': "-1",
                 'eggs-extra': "0",
+                'hide-done': "0",
+                'hide-inactive' : "0",
                }
     strings = { }
     defaults = integers.copy()
@@ -293,6 +295,8 @@ def cl_item_count(task):
 
 
 def print_task_list(tasks, needsCron = False):
+    settings = load_settings(SETTINGS_CONF)
+
     # find longest task name to arrange additional info
     longesttext = 0
     for task in tasks:
@@ -300,6 +304,13 @@ def print_task_list(tasks, needsCron = False):
             longesttext = len(task['text'])
 
     for i, task in enumerate(tasks):
+        # skip line if user wants to hide completed/not due dailies
+        if task['type'] == "daily":
+            if settings['hide-done'] and task['completed']:
+                continue
+            if settings['hide-inactive'] and not task['isDue']:
+                continue
+
         if task['completed']:
             completed = 'x'
         elif task['type'] == "todo":
