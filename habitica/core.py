@@ -1736,9 +1736,8 @@ def cli():
         # List available chat IDs to use with show and send args
         # party is always 0
         if args['<args>'][0] == 'list':
-            alert = ''
-            if groups and groups['id'] in user['newMessages'].keys():
-                alert = '(!)'
+            if groups:
+                alert = '(!)' if groups['id'] in user['newMessages'].keys() else ''
                 print('0 %s %s' % (groups['name'], alert))
 
             # use cache if possible and younger than 1 week
