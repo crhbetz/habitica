@@ -213,12 +213,15 @@ def get_task_ids(tids):
     task_ids = []
     for raw_arg in tids:
         for bit in raw_arg.split(','):
-            if '-' in bit:
+            if re.search(r'[a-z]', bit):
+                task_ids.append(bit)
+            elif '-' in bit:
                 start, stop = [int(e) for e in bit.split('-')]
-                task_ids.extend(range(start, stop + 1))
+                result = range(start, stop + 1)
+                task_ids.extend(e - 1 for e in result)
             else:
-                task_ids.append(int(bit))
-    return [e - 1 for e in set(task_ids)]
+                task_ids.append(int(bit)-1)
+    return [e for e in set(task_ids)]
 
 
 def nice_name(thing):
@@ -273,7 +276,7 @@ def find_pet_to_feed(pets, items, suffix, finicky):
 
 def updated_task_list(tasks, tids):
     for tid in sorted(tids, reverse=True):
-        del(tasks[int(tid)-1])
+        del(tasks[int(tid)])
     return tasks
 
 
@@ -600,6 +603,7 @@ def set_checklists_status(auth, args):
     return
 
 def isChecklistItem(tid):
+    tid = str(tid)
 #    checklist = re.compile(r'^[0-9][a-z]$')
     if re.search(r'^[0-9]+[a-z]$', tid) != None:
         number = ord(re.search(r'[a-z]', tid).group(0)) - 97 #for char in re.findall(r'[a-z]{1}', tid)
@@ -1615,12 +1619,10 @@ def cli():
 
         if direction != None:
             before_user = hbt.user()
-#            tids = get_task_ids(args['<args>'][1:])
-            tids = args['<args>'][1:]
+            tids = get_task_ids(args['<args>'][1:])
             for tid in tids:
                 checklistItem = isChecklistItem(tid)
                 if checklistItem == False:
-                    tid = int(tid) - 1
                     daily = api.Habitica(auth=auth, resource="tasks", aspect=dailies[tid]['id'])
                     daily(_method='post', _one='score', _two=direction)
                     print('marked daily \'%s\' %s'
@@ -1666,20 +1668,18 @@ def cli():
                  if not e['completed']]
         if 'done' in args['<args>']:
             before_user = hbt.user()
-#            tids = get_task_ids(args['<args>'][1:])
-            tids = args['<args>'][1:]
+            tids = get_task_ids(args['<args>'][1:])
             for tid in tids:
                 checklistItem = isChecklistItem(tid)
                 if checklistItem == False:
-                    tid = int(tid) - 1
                     todo = api.Habitica(auth=auth, resource="tasks", aspect=todos[tid]['id'])
                     todo(_method='post', _one='score', _two='up')
                     print('marked todo \'%s\' complete'
                           % todos[tid]['text']) #.encode('utf8'))
                     #sleep(HABITICA_REQUEST_WAIT_TIME)
-                    todos = updated_task_list(todos, tids)
                 elif checklistItem == None:
                     print('Could not parse argument \'%s\' - ignoring it!' % tid)
+                    tids.remove(tid)
                 else:
                     checklist = api.Habitica(auth=auth, resource="tasks",
                                              aspect=todos[checklistItem[0]]['id'])
@@ -1690,6 +1690,8 @@ def cli():
                         _two=todos[checklistItem[0]]['checklist'][checklistItem[1]]['id'] + '/score')
                     todos[checklistItem[0]]['checklist'][checklistItem[1]]['completed'] = \
                         not todos[checklistItem[0]]['checklist'][checklistItem[1]]['completed']
+                    tids.remove(tid)
+            todos = updated_task_list(todos, tids)
             show_delta(hbt, before_user, hbt.user())
         elif 'get' in args['<args>']:
             tids = get_task_ids(args['<args>'][1:])
