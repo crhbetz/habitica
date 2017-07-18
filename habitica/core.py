@@ -78,6 +78,7 @@ def load_settings(configfile):
     integers = {'sell-max': "-1",
                 'sell-reserved': "-1",
                 'eggs-extra': "0",
+                'print-width' : "80",
                }
     strings = { }
     defaults = integers.copy()
@@ -731,7 +732,7 @@ def chatID(party, user, guilds):
         print(message)
         sys.exit(1)
 
-def printChatMessages(messages, messageNum):
+def printChatMessages(messages, messageNum, width):
     messages = sorted(messages, key=lambda k: k['timestamp'])
     messages = messages[-messageNum:]
     for message in messages:
@@ -740,7 +741,7 @@ def printChatMessages(messages, messageNum):
         print('\n%s, %s:\n%s' % (name,
                                 humanize.naturaltime(datetime.datetime.now() \
                                 - datetime.datetime.fromtimestamp(timestamp)),
-                                textwrap.fill(message['text'], width=80)))
+                                textwrap.fill(message['text'], width=width)))
 
 
 def cli():
@@ -1526,11 +1527,11 @@ def cli():
         print('=' * len(title))
         print(title)
         print('=' * len(title))
-        print(textwrap.fill(messages, width=80))
-        print('-' * min(max(len(messages), len(title)), 80))
+        print(textwrap.fill(messages, width=settings['print-width']))
+        print('-' * min(max(len(messages), len(title)), settings['print-width']))
         if user['needsCron']:
-            print(yesterdayMessage)
-            print('-' * max(len(yesterdayMessage), len(messages)))
+            print(textwrap.fill(yesterdayMessage, width=settings['print-width']))
+            print('-' * min(max(len(yesterdayMessage), len(messages)), settings['print-width']))
         print('%s %s' % ('Health:'.rjust(len_ljust, ' '), health))
         print('%s %s' % ('XP:'.rjust(len_ljust, ' '), xp))
         print('%s %s' % ('Mana:'.rjust(len_ljust, ' '), mana))
@@ -1651,9 +1652,9 @@ def cli():
             yesterdayMessage = ('You left these Dailies unchecked yesterday! '
                                 'Do you want to check off any of them now? When you\'re done, start a new '
                                 'day using \'habitica newday\'!')
-            print('-' * min(len(yesterdayMessage), 80))
-            print(textwrap.fill(yesterdayMessage, width=80))
-            print('-' * min(len(yesterdayMessage), 80))
+            print('-' * min(len(yesterdayMessage), settings['print-width']))
+            print(textwrap.fill(yesterdayMessage, width=settings['print-width']))
+            print('-' * min(len(yesterdayMessage), settings['print-width']))
         print_task_list(dailies, needsCron=user['needsCron'])
 
     # handle todo items (v3 ok)
@@ -1787,7 +1788,7 @@ def cli():
             chat = api.Habitica(auth=auth, resource="groups", aspect=party)
             messages = chat(_one='chat')
             chat(_method='post', _one='chat', _two='seen')
-            printChatMessages(messages, messageNum)
+            printChatMessages(messages, messageNum, settings['print-width'])
 
         # sending messages to chats defined by chatID
         elif args['<args>'][0] == 'send':
@@ -1803,7 +1804,7 @@ def cli():
 
             # get and print messages after sending
             messages = chat(_one='chat')
-            printChatMessages(messages, 5)
+            printChatMessages(messages, 5, settings['print-width'])
             # mark chat as seen
             chat(_method='post', _one='chat', _two='seen')
 
