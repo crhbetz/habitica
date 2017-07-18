@@ -67,8 +67,10 @@ DEFAULT_MOUNT = 'Not currently mounted'
 def load_typo_check(config, defaults, section, configfile):
     for item in config.options(section):
         if item not in defaults:
-            raise ValueError("Option '%s' (section '%s') in '%s' not known!"
-                             % (item, section, configfile))
+            print("Warning: Option '%s' (section '%s') in '%s' not known!"
+                  % (item, section, configfile))
+#            raise ValueError("Option '%s' (section '%s') in '%s' not known!"
+#                             % (item, section, configfile))
 
 def load_settings(configfile):
     """Get settings data from the SETTINGS_CONF file."""
