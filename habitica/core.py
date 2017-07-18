@@ -310,6 +310,13 @@ def print_task_list(tasks, needsCron = False):
                 continue
             if settings['hide-inactive'] and not task['isDue']:
                 continue
+            # skip line if recording yesterday's activity,
+            # but not relevant for that
+            if needsCron:
+                if not task['yesterDaily']:
+                    continue
+                elif task['completed'] or not task['isDue']:
+                    continue
 
         if task['completed']:
             completed = 'x'
@@ -341,18 +348,7 @@ def print_task_list(tasks, needsCron = False):
                             humanize.naturaldate(dateutil.parser.parse(task['date'])\
                             .astimezone(dateutil.tz.tzlocal())))
 
-        # are we recording yesterday's activity?
-        if not needsCron:
-            print(task_line)
-        # yesterday's activity is only relevant for dailies
-        elif not task['type'] == "daily":
-            print(task_line)
-        # only show dailies that are due, not completed and chosen as 'yesterdaily'
-        elif task['yesterDaily'] and not task['completed'] and task['isDue']:
-            print(task_line)
-        else:
-        # if we didn't print a task line, we can move to the next item
-            continue
+        print(task_line)
 
         # print checklist if desired and available
         if checklists_on and checklist_available:
