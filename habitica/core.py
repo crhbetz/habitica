@@ -67,8 +67,10 @@ DEFAULT_MOUNT = 'Not currently mounted'
 def load_typo_check(config, defaults, section, configfile):
     for item in config.options(section):
         if item not in defaults:
-            raise ValueError("Option '%s' (section '%s') in '%s' not known!"
-                             % (item, section, configfile))
+            print("Warning: Option '%s' (section '%s') in '%s' not known!"
+                  % (item, section, configfile))
+#            raise ValueError("Option '%s' (section '%s') in '%s' not known!"
+#                             % (item, section, configfile))
 
 def load_settings(configfile):
     """Get settings data from the SETTINGS_CONF file."""
@@ -78,6 +80,9 @@ def load_settings(configfile):
     integers = {'sell-max': "-1",
                 'sell-reserved': "-1",
                 'eggs-extra': "0",
+                'print-width' : "80",
+                'hide-done': "0",
+                'hide-inactive' : "0",
                }
     strings = { }
     defaults = integers.copy()
@@ -212,12 +217,15 @@ def get_task_ids(tids):
     task_ids = []
     for raw_arg in tids:
         for bit in raw_arg.split(','):
-            if '-' in bit:
+            if re.search(r'[a-z]', bit):
+                task_ids.append(bit)
+            elif '-' in bit:
                 start, stop = [int(e) for e in bit.split('-')]
-                task_ids.extend(range(start, stop + 1))
+                result = range(start, stop + 1)
+                task_ids.extend(e - 1 for e in result)
             else:
-                task_ids.append(int(bit))
-    return [e - 1 for e in set(task_ids)]
+                task_ids.append(int(bit)-1)
+    return [e for e in set(task_ids)]
 
 
 def nice_name(thing):
@@ -272,7 +280,7 @@ def find_pet_to_feed(pets, items, suffix, finicky):
 
 def updated_task_list(tasks, tids):
     for tid in sorted(tids, reverse=True):
-        del(tasks[int(tid)-1])
+        del(tasks[int(tid)])
     return tasks
 
 
@@ -293,6 +301,8 @@ def cl_item_count(task):
 
 
 def print_task_list(tasks, needsCron = False):
+    settings = load_settings(SETTINGS_CONF)
+
     # find longest task name to arrange additional info
     longesttext = 0
     for task in tasks:
@@ -300,6 +310,20 @@ def print_task_list(tasks, needsCron = False):
             longesttext = len(task['text'])
 
     for i, task in enumerate(tasks):
+        # skip line if user wants to hide completed/not due dailies
+        if task['type'] == "daily":
+            if settings['hide-done'] and task['completed']:
+                continue
+            if settings['hide-inactive'] and not task['isDue']:
+                continue
+            # skip line if recording yesterday's activity,
+            # but not relevant for that
+            if needsCron:
+                if not task['yesterDaily']:
+                    continue
+                elif task['completed'] or not task['isDue']:
+                    continue
+
         if task['completed']:
             completed = 'x'
         elif task['type'] == "todo":
@@ -330,18 +354,7 @@ def print_task_list(tasks, needsCron = False):
                             humanize.naturaldate(dateutil.parser.parse(task['date'])\
                             .astimezone(dateutil.tz.tzlocal())))
 
-        # are we recording yesterday's activity?
-        if not needsCron:
-            print(task_line)
-        # yesterday's activity is only relevant for dailies
-        elif not task['type'] == "daily":
-            print(task_line)
-        # only show dailies that are due, not completed and chosen as 'yesterdaily'
-        elif task['yesterDaily'] and not task['completed'] and task['isDue']:
-            print(task_line)
-        else:
-        # if we didn't print a task line, we can move to the next item
-            continue
+        print(task_line)
 
         # print checklist if desired and available
         if checklists_on and checklist_available:
@@ -599,6 +612,7 @@ def set_checklists_status(auth, args):
     return
 
 def isChecklistItem(tid):
+    tid = str(tid)
 #    checklist = re.compile(r'^[0-9][a-z]$')
     if re.search(r'^[0-9]+[a-z]$', tid) != None:
         number = ord(re.search(r'[a-z]', tid).group(0)) - 97 #for char in re.findall(r'[a-z]{1}', tid)
@@ -731,7 +745,7 @@ def chatID(party, user, guilds):
         print(message)
         sys.exit(1)
 
-def printChatMessages(messages, messageNum):
+def printChatMessages(messages, messageNum, width):
     messages = sorted(messages, key=lambda k: k['timestamp'])
     messages = messages[-messageNum:]
     for message in messages:
@@ -740,7 +754,7 @@ def printChatMessages(messages, messageNum):
         print('\n%s, %s:\n%s' % (name,
                                 humanize.naturaltime(datetime.datetime.now() \
                                 - datetime.datetime.fromtimestamp(timestamp)),
-                                textwrap.fill(message['text'], width=80)))
+                                textwrap.fill(message['text'], width=width)))
 
 
 def cli():
@@ -1279,7 +1293,7 @@ def cli():
             return
         party_id = group[0]['id']
         quest_data = getattr(hbt.groups, party_id)()['quest']
-        if quest_data:
+        if quest_data and 'key' in quest_data.keys():
             quest_key = quest_data['key']
 
             if cache.get(SECTION_CACHE_QUEST, 'quest_key') != quest_key:
@@ -1340,6 +1354,8 @@ def cli():
                         print('Error accepting the quest! (already accepted?)')
                     else:
                         print('Accepted quest invitation!')
+        else:
+            print('Not currently on a quest.')
 
     # Select a pet or mount (v3 ok)
     elif args['<command>'] == 'ride' or args['<command>'] == 'walk':
@@ -1430,7 +1446,8 @@ def cli():
         # cache info about the current quest in cache.
         quest = 'Not currently on a quest'
         if (party is not None and
-                party.get('quest', '')):
+                party.get('quest', '') and
+                'key' in party['quest'].keys()):
 
             quest_key = party['quest']['key']
 
@@ -1526,11 +1543,11 @@ def cli():
         print('=' * len(title))
         print(title)
         print('=' * len(title))
-        print(textwrap.fill(messages, width=80))
-        print('-' * min(max(len(messages), len(title)), 80))
+        print(textwrap.fill(messages, width=settings['print-width']))
+        print('-' * min(max(len(messages), len(title)), settings['print-width']))
         if user['needsCron']:
-            print(yesterdayMessage)
-            print('-' * max(len(yesterdayMessage), len(messages)))
+            print(textwrap.fill(yesterdayMessage, width=settings['print-width']))
+            print('-' * min(max(len(yesterdayMessage), len(messages)), settings['print-width']))
         print('%s %s' % ('Health:'.rjust(len_ljust, ' '), health))
         print('%s %s' % ('XP:'.rjust(len_ljust, ' '), xp))
         print('%s %s' % ('Mana:'.rjust(len_ljust, ' '), mana))
@@ -1611,12 +1628,10 @@ def cli():
 
         if direction != None:
             before_user = hbt.user()
-#            tids = get_task_ids(args['<args>'][1:])
-            tids = args['<args>'][1:]
+            tids = get_task_ids(args['<args>'][1:])
             for tid in tids:
                 checklistItem = isChecklistItem(tid)
                 if checklistItem == False:
-                    tid = int(tid) - 1
                     daily = api.Habitica(auth=auth, resource="tasks", aspect=dailies[tid]['id'])
                     daily(_method='post', _one='score', _two=direction)
                     print('marked daily \'%s\' %s'
@@ -1651,9 +1666,9 @@ def cli():
             yesterdayMessage = ('You left these Dailies unchecked yesterday! '
                                 'Do you want to check off any of them now? When you\'re done, start a new '
                                 'day using \'habitica newday\'!')
-            print('-' * min(len(yesterdayMessage), 80))
-            print(textwrap.fill(yesterdayMessage, width=80))
-            print('-' * min(len(yesterdayMessage), 80))
+            print('-' * min(len(yesterdayMessage), settings['print-width']))
+            print(textwrap.fill(yesterdayMessage, width=settings['print-width']))
+            print('-' * min(len(yesterdayMessage), settings['print-width']))
         print_task_list(dailies, needsCron=user['needsCron'])
 
     # handle todo items (v3 ok)
@@ -1662,20 +1677,18 @@ def cli():
                  if not e['completed']]
         if 'done' in args['<args>']:
             before_user = hbt.user()
-#            tids = get_task_ids(args['<args>'][1:])
-            tids = args['<args>'][1:]
+            tids = get_task_ids(args['<args>'][1:])
             for tid in tids:
                 checklistItem = isChecklistItem(tid)
                 if checklistItem == False:
-                    tid = int(tid) - 1
                     todo = api.Habitica(auth=auth, resource="tasks", aspect=todos[tid]['id'])
                     todo(_method='post', _one='score', _two='up')
                     print('marked todo \'%s\' complete'
                           % todos[tid]['text']) #.encode('utf8'))
                     #sleep(HABITICA_REQUEST_WAIT_TIME)
-                    todos = updated_task_list(todos, tids)
                 elif checklistItem == None:
                     print('Could not parse argument \'%s\' - ignoring it!' % tid)
+                    tids.remove(tid)
                 else:
                     checklist = api.Habitica(auth=auth, resource="tasks",
                                              aspect=todos[checklistItem[0]]['id'])
@@ -1686,6 +1699,8 @@ def cli():
                         _two=todos[checklistItem[0]]['checklist'][checklistItem[1]]['id'] + '/score')
                     todos[checklistItem[0]]['checklist'][checklistItem[1]]['completed'] = \
                         not todos[checklistItem[0]]['checklist'][checklistItem[1]]['completed']
+                    tids.remove(tid)
+            todos = updated_task_list(todos, tids)
             show_delta(hbt, before_user, hbt.user())
         elif 'get' in args['<args>']:
             tids = get_task_ids(args['<args>'][1:])
@@ -1721,9 +1736,8 @@ def cli():
         # List available chat IDs to use with show and send args
         # party is always 0
         if args['<args>'] == [] or args['<args>'][0] == 'list':
-            alert = ''
-            if groups and groups['id'] in user['newMessages'].keys():
-                alert = '(!)'
+            if groups:
+                alert = '(!)' if groups['id'] in user['newMessages'].keys() else ''
                 print('0 %s %s' % (groups['name'], alert))
 
             # use cache if possible and younger than 1 week
@@ -1736,7 +1750,9 @@ def cli():
                         name = cache.get(SECTION_CACHE_GUILDNAMES, guilds[i])
                     except configparser.NoOptionError:
                         # name not yet cached
-                        name = getattr(hbt.groups, guilds[i])()['name']
+                        guild = getattr(hbt.groups, guilds[i])()
+                        name = guild['name']
+                        name += ' -?-' if guild['memberCount'] > 5000 else ''
                         cache = update_guildnames_cache(CACHE_CONF,
                                                number=guilds[i],
                                                name=name)
@@ -1748,11 +1764,16 @@ def cli():
                                           name=str(time()))
                 for i in range(len(guilds)):
                     alert = '(!)' if guilds[i] in user['newMessages'].keys() else ''
-                    name = getattr(hbt.groups, guilds[i])()['name']
+                    guild = getattr(hbt.groups, guilds[i])()
+                    name = guild['name']
+                    name += ' -?-' if guild['memberCount'] > 5000 else ''
                     cache = update_guildnames_cache(CACHE_CONF,
                                                number=guilds[i],
                                                name=name)
                     print('%d %s %s' % (i + 1, name, alert))
+            print('-' * 53)
+            print('-?- can\'t send notifications (more than 5000 members)'
+                  '\n(!) new message')
 
         # Print chat messages
         elif args['<args>'][0] == 'show':
@@ -1787,7 +1808,7 @@ def cli():
             chat = api.Habitica(auth=auth, resource="groups", aspect=party)
             messages = chat(_one='chat')
             chat(_method='post', _one='chat', _two='seen')
-            printChatMessages(messages, messageNum)
+            printChatMessages(messages, messageNum, settings['print-width'])
 
         # sending messages to chats defined by chatID
         elif args['<args>'][0] == 'send':
@@ -1803,7 +1824,7 @@ def cli():
 
             # get and print messages after sending
             messages = chat(_one='chat')
-            printChatMessages(messages, 5)
+            printChatMessages(messages, 5, settings['print-width'])
             # mark chat as seen
             chat(_method='post', _one='chat', _two='seen')
 
