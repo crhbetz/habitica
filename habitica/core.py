@@ -1720,7 +1720,7 @@ def cli():
 
         # List available chat IDs to use with show and send args
         # party is always 0
-        if args['<args>'][0] == 'list':
+        if args['<args>'] == [] or args['<args>'][0] == 'list':
             alert = ''
             if groups and groups['id'] in user['newMessages'].keys():
                 alert = '(!)'
