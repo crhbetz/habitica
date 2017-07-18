@@ -1280,7 +1280,7 @@ def cli():
             return
         party_id = group[0]['id']
         quest_data = getattr(hbt.groups, party_id)()['quest']
-        if quest_data:
+        if quest_data and 'key' in quest_data.keys():
             quest_key = quest_data['key']
 
             if cache.get(SECTION_CACHE_QUEST, 'quest_key') != quest_key:
@@ -1341,6 +1341,8 @@ def cli():
                         print('Error accepting the quest! (already accepted?)')
                     else:
                         print('Accepted quest invitation!')
+        else:
+            print('Not currently on a quest.')
 
     # Select a pet or mount (v3 ok)
     elif args['<command>'] == 'ride' or args['<command>'] == 'walk':
@@ -1431,7 +1433,8 @@ def cli():
         # cache info about the current quest in cache.
         quest = 'Not currently on a quest'
         if (party is not None and
-                party.get('quest', '')):
+                party.get('quest', '') and
+                'key' in party['quest'].keys()):
 
             quest_key = party['quest']['key']
 
