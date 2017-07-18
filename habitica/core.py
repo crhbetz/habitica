@@ -1750,7 +1750,9 @@ def cli():
                         name = cache.get(SECTION_CACHE_GUILDNAMES, guilds[i])
                     except configparser.NoOptionError:
                         # name not yet cached
-                        name = getattr(hbt.groups, guilds[i])()['name']
+                        guild = getattr(hbt.groups, guilds[i])()
+                        name = guild['name']
+                        name += ' -?-' if guild['memberCount'] > 5000 else ''
                         cache = update_guildnames_cache(CACHE_CONF,
                                                number=guilds[i],
                                                name=name)
@@ -1762,11 +1764,16 @@ def cli():
                                           name=str(time()))
                 for i in range(len(guilds)):
                     alert = '(!)' if guilds[i] in user['newMessages'].keys() else ''
-                    name = getattr(hbt.groups, guilds[i])()['name']
+                    guild = getattr(hbt.groups, guilds[i])()
+                    name = guild['name']
+                    name += ' -?-' if guild['memberCount'] > 5000 else ''
                     cache = update_guildnames_cache(CACHE_CONF,
                                                number=guilds[i],
                                                name=name)
                     print('%d %s %s' % (i + 1, name, alert))
+            print('-' * 53)
+            print('-?- can\'t send notifications (more than 5000 members)'
+                  '\n(!) new message')
 
         # Print chat messages
         elif args['<args>'][0] == 'show':
