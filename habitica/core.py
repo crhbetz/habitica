@@ -81,6 +81,8 @@ def load_settings(configfile):
                 'sell-reserved': "-1",
                 'eggs-extra': "0",
                 'print-width' : "80",
+                'hide-done': "0",
+                'hide-inactive' : "0",
                }
     strings = { }
     defaults = integers.copy()
@@ -299,6 +301,8 @@ def cl_item_count(task):
 
 
 def print_task_list(tasks, needsCron = False):
+    settings = load_settings(SETTINGS_CONF)
+
     # find longest task name to arrange additional info
     longesttext = 0
     for task in tasks:
@@ -306,6 +310,20 @@ def print_task_list(tasks, needsCron = False):
             longesttext = len(task['text'])
 
     for i, task in enumerate(tasks):
+        # skip line if user wants to hide completed/not due dailies
+        if task['type'] == "daily":
+            if settings['hide-done'] and task['completed']:
+                continue
+            if settings['hide-inactive'] and not task['isDue']:
+                continue
+            # skip line if recording yesterday's activity,
+            # but not relevant for that
+            if needsCron:
+                if not task['yesterDaily']:
+                    continue
+                elif task['completed'] or not task['isDue']:
+                    continue
+
         if task['completed']:
             completed = 'x'
         elif task['type'] == "todo":
@@ -336,18 +354,7 @@ def print_task_list(tasks, needsCron = False):
                             humanize.naturaldate(dateutil.parser.parse(task['date'])\
                             .astimezone(dateutil.tz.tzlocal())))
 
-        # are we recording yesterday's activity?
-        if not needsCron:
-            print(task_line)
-        # yesterday's activity is only relevant for dailies
-        elif not task['type'] == "daily":
-            print(task_line)
-        # only show dailies that are due, not completed and chosen as 'yesterdaily'
-        elif task['yesterDaily'] and not task['completed'] and task['isDue']:
-            print(task_line)
-        else:
-        # if we didn't print a task line, we can move to the next item
-            continue
+        print(task_line)
 
         # print checklist if desired and available
         if checklists_on and checklist_available:
